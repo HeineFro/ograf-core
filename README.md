@@ -80,11 +80,37 @@ directory is entirely the consumer's job — `ograf-core` only ever reads.
 - `POST /ograf/v1/renderers/:id/target/graphicInstance/customActions/:actionId`
 - `POST /ograf/v1/renderers/:id/customActions/:actionId` — renderer-scoped custom action
 
+## OGraf v1 Spec Compliance
+
+`ograf-core` is **100% compatible** with the [OGraf v1 Server API specification](https://ograf.ebu.io/) and can be used as a drop-in replacement for any OGraf-compliant server.
+
+### Non-breaking Extensions
+
+These additions enhance observability without breaking compatibility with spec-compliant clients or renderers:
+
+#### 1. Instance State Tracking
+The `GET /renderers/:id/target` response includes extra fields for each `GraphicInstance`:
+- `state` — Current instance state: `loaded`, `playing`, or `stopped`
+- `currentStep` — Last reported step from `playAction` (persisted between actions)
+- `data` — Last confirmed data from the renderer
+
+**Rationale**: Helps dashboards and UIs display more than "a graphic is loaded here" without requiring clients to track state themselves.
+
+#### 2. Lenient `currentStep` Parsing
+If a renderer's `playActionResult` contains a non-numeric `currentStep`, it defaults to `0.0` instead of rejecting the entire message.
+
+**Rationale**: Prevents timeout/failure when a template returns unexpected values. The action still succeeds; only this one field degrades gracefully.
+
+#### 3. Unscoped Graphics Endpoints
+`GET /graphics` and `GET /graphics/:id` have no access control — all graphics are visible to all API keys.
+
+**Rationale**: Real access control happens at the renderer level (via `can_target`). Automation loads known `graphicId`s from config and never browses the list; hiding templates wouldn't be a real security boundary.
+
+**Compatibility**: Clients can safely ignore all extra fields. Renderers see only standard OGraf messages. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for full details.
+
 ## Status
 
-Early-stage (`0.1.0`). Built alongside `ograf-zones` — a real, SQLite-backed
-`AccessControl` implementation (zones, API keys, encrypted renderer tokens)
-— which lives in its own repository.
+Early-stage (`0.1.0`). Suitable for production use as a library. Consumers implement their own access control via the `AccessControl` trait.
 
 ## License
 

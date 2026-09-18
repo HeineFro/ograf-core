@@ -13,6 +13,7 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
-# Markdown files except README
+# Markdown files except README and spec compliance docs
 *.md
 !README.md
+!SPEC_COMPLIANCE.md
