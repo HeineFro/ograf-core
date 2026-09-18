@@ -1,9 +1,7 @@
 # ograf-core
 
 A pure, unauthenticated Rust implementation of the [OGraf](https://ograf.ebu.io/)
-graphics-control HTTP + WebSocket API. No database, no users, no API keys,
-no opinion on multi-tenancy — just graphics, renderers, and actions, per the
-spec.
+graphics-control HTTP + WebSocket API. 
 
 ## Design
 
@@ -82,7 +80,9 @@ directory is entirely the consumer's job — `ograf-core` only ever reads.
 
 ## OGraf v1 Spec Compliance
 
-`ograf-core` is **100% compatible** with the [OGraf v1 Server API specification](https://ograf.ebu.io/) and can be used as a drop-in replacement for any OGraf-compliant server.
+`ograf-core` implements the complete [OGraf v1 Server API specification](https://ograf.ebu.io/). All endpoints, WebSocket messages, and behaviors match the official spec (see [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for verification details).
+
+**Note:** While spec-compliant, this is an early-stage implementation (v0.1.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFlyTV/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
 
 ### Non-breaking Extensions
 
@@ -101,16 +101,23 @@ If a renderer's `playActionResult` contains a non-numeric `currentStep`, it defa
 
 **Rationale**: Prevents timeout/failure when a template returns unexpected values. The action still succeeds; only this one field degrades gracefully.
 
-#### 3. Unscoped Graphics Endpoints
-`GET /graphics` and `GET /graphics/:id` have no access control — all graphics are visible to all API keys.
-
-**Rationale**: Real access control happens at the renderer level (via `can_target`). Automation loads known `graphicId`s from config and never browses the list; hiding templates wouldn't be a real security boundary.
-
 **Compatibility**: Clients can safely ignore all extra fields. Renderers see only standard OGraf messages. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for full details.
 
 ## Status
 
-Early-stage (`0.1.0`). Suitable for production use as a library. Consumers implement their own access control via the `AccessControl` trait.
+**Early-stage (0.1.0)** — Spec-compliant but not yet battle-tested in production.
+
+This is a library implementation of the OGraf v1 spec. Consumers implement their own access control via the `AccessControl` trait.
+
+**Use in production:** Possible, but be aware this is a new implementation without significant production usage. Test thoroughly in your environment before deploying.
+
+## Learn More About OGraf
+
+- **[OGraf Specification](https://ograf.ebu.io/)** — Official EBU specification
+- **[SuperFly.tv](https://github.com/SuperFlyTV)** — OGraf tooling and TypeScript server implementation
+- **[Streamshapers](https://streamshapers.com/)** — Professional OGraf solutions and services
+
+Questions or feedback? [Open an issue](https://github.com/HeineFro/ograf-core/issues) on GitHub.
 
 ## License
 
