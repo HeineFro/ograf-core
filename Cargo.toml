@@ -2,7 +2,16 @@
 name = "ograf-core"
 version = "0.1.0"
 edition = "2021"
+authors = ["Heine Froholdt <heine.froholdt@gmail.com>"]
 license = "MIT OR Apache-2.0"
+description = "Pure Rust implementation of the OGraf v1 graphics-control API (HTTP + WebSocket) - 100% spec-compliant library"
+repository = "https://github.com/HeineFro/ograf-core"
+homepage = "https://github.com/HeineFro/ograf-core"
+documentation = "https://docs.rs/ograf-core"
+readme = "README.md"
+keywords = ["ograf", "graphics", "broadcast", "websocket", "axum"]
+categories = ["web-programming", "api-bindings", "multimedia"]
+rust-version = "1.75"
 
 [lib]
 name = "ograf_core"
