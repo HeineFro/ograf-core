@@ -47,10 +47,9 @@ impl Graphic {
 /// Identifies a RenderTarget on a Renderer. Per the OGraf spec, its shape is
 /// defined by each Renderer's own `renderTargetSchema` — Core treats it as
 /// an opaque, shallow JSON object and only ever compares it for equality.
-/// The CasparCG renderer (`renderer/index.html`) declares its own as
-/// `{channel, layer}`, fixed for the lifetime of one WS connection (see
-/// docs/caspar.md); other renderer types (eg a file-render worker) are free
-/// to use a different shape (eg `{profile: "16:9-1080p"}`).
+/// For example, a CasparCG renderer might use `{channel, layer}`, fixed for
+/// the lifetime of one WS connection; other renderer types (eg a file-render
+/// worker) are free to use a different shape (eg `{profile: "16:9-1080p"}`).
 pub type RenderTarget = Value;
 
 /// Not part of the OGraf spec itself (the spec has no instance state
@@ -202,10 +201,9 @@ pub enum RendererMessage {
         #[serde(rename = "statusMessage", default)]
         status_message: Option<String>,
         // Lenient on purpose: `currentStep` is whatever a template's own
-        // playAction() happened to return (see renderer/index.html) — a
-        // template that returns something non-numeric shouldn't sink the
-        // *entire* message (and hang the HTTP caller for the full timeout,
-        // per the incident this fixed) just because of this one field.
+        // playAction() happened to return — a template that returns something
+        // non-numeric shouldn't sink the *entire* message (and hang the HTTP
+        // caller for the full timeout) just because of this one field.
         #[serde(rename = "currentStep", default, deserialize_with = "lenient_f64")]
         current_step: f64,
     },

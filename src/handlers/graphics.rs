@@ -14,11 +14,11 @@ use crate::{
     AppState,
 };
 
-// Unscoped by design (Ograf-v2.md §2/§4): automation loads a known
-// `graphicId` from its own config, never browses a list, and an operator's
-// controller is tightly coupled to specific templates — hiding templates
-// from a listing wouldn't be a real access boundary. The real one is
-// `can_target` on the renderer a graphic gets loaded onto.
+// Unscoped by design: automation loads a known `graphicId` from its own
+// config, never browses a list, and an operator's controller is tightly
+// coupled to specific templates — hiding templates from a listing wouldn't
+// be a real access boundary. The real one is `can_target` on the renderer a
+// graphic gets loaded onto.
 
 pub async fn list_graphics(State(state): State<AppState>) -> Result<Json<Value>> {
     let graphics = GraphicStore::new(&state.config.graphics_storage).list().await?;

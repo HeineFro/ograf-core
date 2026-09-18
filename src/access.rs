@@ -1,7 +1,7 @@
-//! Dependency Inversion seam (Ograf-v2.md §1): Core defines what access
-//! control it needs, never how it's decided. `ograf-zones` provides the real
-//! implementation; [`AllowAllAccessControl`] is a trivial one for anyone who
-//! wants no restriction at all.
+//! Dependency Inversion seam: Core defines what access control it needs,
+//! never how it's decided. Consumers can provide their own implementation;
+//! [`AllowAllAccessControl`] is a trivial one for anyone who wants no
+//! restriction at all.
 
 use async_trait::async_trait;
 
@@ -16,9 +16,9 @@ pub trait AccessControl: Send + Sync {
     async fn authorize_connect(&self, query: &str) -> bool;
 
     /// Called once a renderer's `hello` names it, after `authorize_connect`
-    /// already approved the connection — a chance to record durable
-    /// identity, e.g. persisting name → zone for failover (Ograf-v2.md §3).
-    /// Best-effort: Core doesn't drop the connection if this does nothing.
+    /// already approved the connection — a chance to record durable identity
+    /// for tracking or failover purposes. Best-effort: Core doesn't drop the
+    /// connection if this does nothing.
     async fn on_renderer_connected(&self, name: &str, query: &str);
 
     /// Filters `renderers` down to what `api_key` may see — `GET /renderers`.
@@ -27,13 +27,13 @@ pub trait AccessControl: Send + Sync {
     /// Whether `api_key` may target the renderer named `renderer_name` —
     /// checked before every renderer-scoped call (get/target/load/play/
     /// stop/update/customAction/clear). Keyed on the stable *name*, not the
-    /// per-session `id` (Ograf-v2.md §3).
+    /// per-session `id`.
     async fn can_target(&self, api_key: &str, renderer_name: &str) -> bool;
 }
 
 /// No restriction at all — every renderer visible, every key can target
 /// anything, every connection accepted. The default for a consumer that
-/// doesn't want `ograf-zones` (or hasn't wired anything up yet).
+/// doesn't need access control (or hasn't wired anything up yet).
 pub struct AllowAllAccessControl;
 
 #[async_trait]

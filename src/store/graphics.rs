@@ -9,20 +9,19 @@ use crate::{
 };
 
 /// Reads graphics straight from disk — Core owns no database. Whatever sits
-/// in front of Core (`ograf-zones`' admin routes, or a human with `scp`)
-/// writes (and deletes) `{graphics_storage}/{graphic_id}/...` directly; Core
-/// only ever reads. Re-scanned on every call rather than cached, since at
-/// the scale this runs at (a handful of templates) that's cheaper than
-/// building and invalidating a cache correctly.
+/// in front of Core (admin routes, or a human with `scp`) writes (and deletes)
+/// `{graphics_storage}/{graphic_id}/...` directly; Core only ever reads.
+/// Re-scanned on every call rather than cached, since at the scale this runs
+/// at (a handful of templates) that's cheaper than building and invalidating
+/// a cache correctly.
 pub struct GraphicStore {
     root: PathBuf,
 }
 
 /// A `graphic_id` reaches here straight from a URL path segment — it's only
 /// ever safe to use as a filesystem directory name (never joined containing
-/// `..`/`/`) once it passes this. Mirrors the charset `ograf-zones::storage`
-/// already enforces at upload time, enforced again here since every other
-/// caller (read/thumbnail/asset/delete) trusts whatever's in the URL.
+/// `..`/`/`) once it passes this. Enforced here since every other caller
+/// (read/thumbnail/asset/delete) trusts whatever's in the URL.
 pub fn is_valid_graphic_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }

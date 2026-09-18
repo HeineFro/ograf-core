@@ -189,8 +189,7 @@ fn session_to_info(s: &RendererSession) -> RendererInfo {
     // `instances` is a HashMap (keyed by id for O(1) lookup on actions),
     // which has no defined iteration order — sorting by `loaded_at` here
     // reconstructs actual load order, which is also visual stacking order
-    // in the reference renderer (renderer/index.html just appends each new
-    // instance's layer div, so newest-loaded paints on top). Newest first,
+    // in typical renderers (newer instances paint on top). Newest first,
     // so callers can treat this list as "top of stack first".
     let mut instances: Vec<_> = s.instances.values().cloned().collect();
     instances.sort_by(|a, b| b.loaded_at.cmp(&a.loaded_at));

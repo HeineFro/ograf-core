@@ -2,8 +2,8 @@
 //! renderer WebSocket protocol. Knows nothing about zones, API keys, or
 //! admin accounts — every access decision is delegated to whatever
 //! [`access::AccessControl`] implementation the binary wires in (Dependency
-//! Inversion, see Ograf-v2.md §1). A consumer that wants no access control
-//! at all can use [`access::AllowAllAccessControl`].
+//! Inversion principle). A consumer that wants no access control at all can
+//! use [`access::AllowAllAccessControl`].
 
 pub mod access;
 pub mod config;

@@ -1,8 +1,7 @@
 use std::{env, time::Duration};
 
-/// No `renderer_token` here anymore — Ograf-v2.md §3 replaces the single
-/// global token with per-zone tokens, which live in `ograf-zones`'
-/// database, not in Core's env-derived config.
+/// No `renderer_token` here — access control is delegated to the
+/// `AccessControl` implementation, not handled by Core's env-derived config.
 pub struct Config {
     pub host: String,
     pub port: u16,

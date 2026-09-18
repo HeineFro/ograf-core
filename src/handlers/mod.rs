@@ -22,8 +22,8 @@ pub async fn server_info() -> Json<Value> {
 
 /// The vendor/controller API key from `X-OGraf-Key`, or empty if absent —
 /// an `AccessControl` implementation decides what an empty key means
-/// (`AllowAllAccessControl` doesn't care; `ZoneAccessControl` fails its hash
-/// lookup, same as any other unrecognized key).
+/// (`AllowAllAccessControl` doesn't care; other implementations may reject
+/// empty or unrecognized keys).
 pub(crate) fn api_key_from(headers: &HeaderMap) -> String {
     headers
         .get("X-OGraf-Key")

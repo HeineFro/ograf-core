@@ -25,7 +25,7 @@ struct Hello {
 /// `query` is the connect URL's raw query string — already used once by
 /// `authorize_connect` before the WS upgrade, threaded through here too so
 /// `on_renderer_connected` can see it once the renderer's `hello` names it
-/// (e.g. `ZoneAccessControl` persisting name → zone for failover).
+/// (e.g. an AccessControl implementation persisting renderer identity).
 pub async fn handle_session(mut socket: WebSocket, state: AppState, query: String) {
     let Some(hello) = wait_for_hello(&mut socket).await else {
         return;
