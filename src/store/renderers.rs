@@ -1,6 +1,7 @@
 use chrono::Utc;
+use dashmap::DashMap;
 use std::{collections::HashMap, time::Duration};
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use crate::{
@@ -24,9 +25,16 @@ pub struct RendererSession {
     pub pending: HashMap<Uuid, oneshot::Sender<RendererMessage>>,
 }
 
-#[derive(Default)]
 pub struct RendererRegistry {
-    sessions: RwLock<HashMap<RendererId, RendererSession>>,
+    sessions: DashMap<RendererId, RendererSession>,
+}
+
+impl Default for RendererRegistry {
+    fn default() -> Self {
+        Self {
+            sessions: DashMap::new(),
+        }
+    }
 }
 
 impl RendererRegistry {
@@ -36,29 +44,25 @@ impl RendererRegistry {
 
     pub async fn register(&self, session: RendererSession) -> RendererId {
         let id = session.id;
-        self.sessions.write().await.insert(id, session);
+        self.sessions.insert(id, session);
         id
     }
 
     pub async fn unregister(&self, id: RendererId) {
-        self.sessions.write().await.remove(&id);
+        self.sessions.remove(&id);
     }
 
     pub async fn get_info(&self, id: RendererId) -> Result<RendererInfo> {
         self.sessions
-            .read()
-            .await
             .get(&id)
-            .map(session_to_info)
+            .map(|entry| session_to_info(&entry))
             .ok_or_else(|| AppError::NotFound(format!("renderer '{id}'")))
     }
 
     pub async fn list_info(&self) -> Vec<RendererInfo> {
         self.sessions
-            .read()
-            .await
-            .values()
-            .map(session_to_info)
+            .iter()
+            .map(|entry| session_to_info(entry.value()))
             .collect()
     }
 
@@ -76,13 +80,11 @@ impl RendererRegistry {
         let msg = build(request_id);
         let (tx, rx) = oneshot::channel();
 
-        // Only hold the write lock long enough to register the pending reply
-        // and grab a cloned sender handle — the actual WS send (and the
-        // await below) happen without it, so one busy renderer's channel
-        // can't stall commands to every other renderer.
+        // DashMap's get_mut holds a shard-level lock, not a global lock,
+        // so one busy renderer doesn't stall commands to other renderers
+        // (assuming they hash to different shards).
         let sender = {
-            let mut sessions = self.sessions.write().await;
-            let session = sessions
+            let mut session = self.sessions
                 .get_mut(&renderer_id)
                 .ok_or_else(|| AppError::RendererNotConnected(renderer_id.to_string()))?;
             session.pending.insert(request_id, tx);
@@ -98,7 +100,7 @@ impl RendererRegistry {
             Ok(Ok(reply)) => Ok(reply),
             Ok(Err(_)) => Err(AppError::RendererNotConnected(renderer_id.to_string())),
             Err(_) => {
-                if let Some(session) = self.sessions.write().await.get_mut(&renderer_id) {
+                if let Some(mut session) = self.sessions.get_mut(&renderer_id) {
                     session.pending.remove(&request_id);
                 }
                 Err(AppError::Timeout(renderer_id.to_string()))
@@ -110,15 +112,12 @@ impl RendererRegistry {
     /// endpoints reflect renderer-confirmed truth, not what was merely sent)
     /// and wakes up the HTTP handler awaiting it via `send_and_await`, if any.
     pub async fn resolve(&self, renderer_id: RendererId, request_id: Uuid, message: RendererMessage) {
-        let mut sessions = self.sessions.write().await;
-        let Some(session) = sessions.get_mut(&renderer_id) else {
-            return;
-        };
+        if let Some(mut session) = self.sessions.get_mut(&renderer_id) {
+            apply_result(&mut session, &message);
 
-        apply_result(session, &message);
-
-        if let Some(tx) = session.pending.remove(&request_id) {
-            let _ = tx.send(message);
+            if let Some(tx) = session.pending.remove(&request_id) {
+                let _ = tx.send(message);
+            }
         }
     }
 }
