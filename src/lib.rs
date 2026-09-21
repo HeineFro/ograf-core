@@ -10,6 +10,7 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 pub mod models;
+pub mod protocol;
 pub mod renderer_ws;
 pub mod store;
 
