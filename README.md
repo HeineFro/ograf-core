@@ -57,14 +57,22 @@ top-level router alongside whatever admin/auth routes your binary adds.
 | `OGRAF_STORAGE` | `./graphics` | Where graphics live on disk (relative to the process's working directory) |
 | `RUST_LOG` | `info` | Log level |
 | `OGRAF_ACTION_TIMEOUT_MS` | `5000` | How long an HTTP action call waits for the renderer's confirmation before failing |
+| `OGRAF_GRAPHICS_CACHE_TTL_SECS` | `30` | Graphics list cache TTL in seconds (0 = disabled, always fetch fresh) |
 
 ## Where graphics come from
 
-`GraphicStore` (`src/store/graphics.rs`) scans `OGRAF_STORAGE` fresh on
-every request — no database, no cache. Any immediate subdirectory
-containing a `*.ograf.json` manifest is treated as one graphic; the
-subdirectory name becomes its `graphicId`. Writing (or deleting) that
-directory is entirely the consumer's job — `ograf-core` only ever reads.
+`GraphicStore` (`src/store/graphics.rs`) scans `OGRAF_STORAGE` on disk and
+caches the result for `OGRAF_GRAPHICS_CACHE_TTL_SECS` (default: 30 seconds).
+Set TTL to `0` to disable caching and always fetch fresh from disk.
+
+Any immediate subdirectory containing a `*.ograf.json` manifest is treated
+as one graphic; the subdirectory name becomes its `graphicId`. Writing (or
+deleting) that directory is entirely the consumer's job — `ograf-core` only
+ever reads.
+
+**Note:** With caching enabled, new/deleted graphics may not appear immediately
+(up to TTL delay). For development environments where graphics change frequently,
+consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 
 ## API surface
 
@@ -82,7 +90,7 @@ directory is entirely the consumer's job — `ograf-core` only ever reads.
 
 `ograf-core` implements the complete [OGraf v1 Server API specification](https://ograf.ebu.io/). All endpoints, WebSocket messages, and behaviors match the official spec (see [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for verification details).
 
-**Note:** While spec-compliant, this is an early-stage implementation (v0.1.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFlyTV/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
+**Note:** While spec-compliant, this is an early-stage implementation (v0.2.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFly.tv/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
 
 ### Non-breaking Extensions
 
