@@ -8,6 +8,7 @@ pub struct Config {
     pub graphics_storage: String,
     pub log_level: String,
     pub action_timeout_ms: u64,
+    pub graphics_cache_ttl_secs: u64,
 }
 
 impl Config {
@@ -24,6 +25,10 @@ impl Config {
                 .unwrap_or_else(|_| "5000".into())
                 .parse()
                 .expect("OGRAF_ACTION_TIMEOUT_MS must be a valid number"),
+            graphics_cache_ttl_secs: env::var("OGRAF_GRAPHICS_CACHE_TTL_SECS")
+                .unwrap_or_else(|_| "30".into())
+                .parse()
+                .expect("OGRAF_GRAPHICS_CACHE_TTL_SECS must be a valid number"),
         }
     }
 
@@ -31,5 +36,11 @@ impl Config {
     /// command before treating it as failed (504).
     pub fn action_timeout(&self) -> Duration {
         Duration::from_millis(self.action_timeout_ms)
+    }
+
+    /// How long to cache the graphics list before re-scanning disk.
+    /// Set to 0 to disable caching (always fetch fresh from disk).
+    pub fn graphics_cache_ttl(&self) -> Duration {
+        Duration::from_secs(self.graphics_cache_ttl_secs)
     }
 }

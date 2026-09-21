@@ -111,7 +111,9 @@ pub(crate) fn parse_renderer_id(renderer_id: &str) -> Result<Uuid> {
 }
 
 pub(crate) async fn load_graphics_by_id(state: &AppState) -> Result<HashMap<String, Graphic>> {
-    let graphics = GraphicStore::new(&state.config.graphics_storage).list().await?;
+    let graphics = GraphicStore::new(&state.config.graphics_storage)
+        .list_cached(state.config.graphics_cache_ttl())
+        .await?;
     Ok(graphics.into_iter().map(|g| (g.id.clone(), g)).collect())
 }
 

@@ -1,19 +1,33 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::OnceLock,
+    time::{Duration, Instant},
+};
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
+use tokio::sync::RwLock;
 
 use crate::{
     error::{AppError, Result},
     models::Graphic,
 };
 
+/// Global cache for graphics list. Shared across all GraphicStore instances
+/// to avoid redundant disk scans when multiple handlers request the list
+/// concurrently or in quick succession.
+static GRAPHICS_CACHE: OnceLock<RwLock<GraphicsCache>> = OnceLock::new();
+
+struct GraphicsCache {
+    graphics: Vec<Graphic>,
+    fetched_at: Instant,
+}
+
 /// Reads graphics straight from disk — Core owns no database. Whatever sits
 /// in front of Core (admin routes, or a human with `scp`) writes (and deletes)
 /// `{graphics_storage}/{graphic_id}/...` directly; Core only ever reads.
-/// Re-scanned on every call rather than cached, since at the scale this runs
-/// at (a handful of templates) that's cheaper than building and invalidating
-/// a cache correctly.
+/// Caches the list() result for a configurable TTL to avoid repeated disk
+/// scans when serving multiple concurrent requests.
 pub struct GraphicStore {
     root: PathBuf,
 }
@@ -87,6 +101,47 @@ impl GraphicStore {
         }
 
         graphics.sort_by(|a, b| b.uploaded_at.cmp(&a.uploaded_at));
+        Ok(graphics)
+    }
+
+    /// Like `list()`, but caches the result for `ttl`. If `ttl` is zero,
+    /// behaves identically to `list()` (always fetches fresh from disk).
+    /// The cache is global and shared across all GraphicStore instances.
+    pub async fn list_cached(&self, ttl: Duration) -> Result<Vec<Graphic>> {
+        // TTL of zero means no caching — always fetch fresh
+        if ttl.is_zero() {
+            return self.list().await;
+        }
+
+        let cache = GRAPHICS_CACHE.get_or_init(|| {
+            RwLock::new(GraphicsCache {
+                graphics: Vec::new(),
+                // Force initial fetch by setting timestamp in the past
+                fetched_at: Instant::now() - Duration::from_secs(3600),
+            })
+        });
+
+        // Fast path: check if cache is still valid under read lock
+        {
+            let guard = cache.read().await;
+            if guard.fetched_at.elapsed() < ttl {
+                return Ok(guard.graphics.clone());
+            }
+        }
+
+        // Slow path: cache expired, acquire write lock and refresh
+        let mut guard = cache.write().await;
+
+        // Double-check: another task might have refreshed while we waited
+        if guard.fetched_at.elapsed() < ttl {
+            return Ok(guard.graphics.clone());
+        }
+
+        // Actually fetch from disk
+        let graphics = self.list().await?;
+        guard.graphics = graphics.clone();
+        guard.fetched_at = Instant::now();
+
         Ok(graphics)
     }
 
