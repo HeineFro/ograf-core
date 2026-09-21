@@ -125,7 +125,7 @@ fn generic_render_target_schema() -> Value {
 pub(crate) fn target_info(info: &RendererInfo, graphics: &HashMap<String, Graphic>) -> Value {
     json!({
         "renderTarget": info.render_target,
-        "name": info.render_target.to_string(),
+        "name": info.name,
         "graphicInstances": info.instances.iter().map(|inst| json!({
             "graphicInstanceId": inst.instance_id,
             "graphic": graphics
