@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    models::{RenderTarget, RendererId, RendererMessage, WsMessage},
+    models::{RenderTarget, RendererId, RendererMessage, ServerMessage},
     store::renderers::{RendererRegistry, RendererSession},
     AppState,
 };
@@ -32,7 +32,7 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
     };
     let renderer_id = hello.id;
 
-    let (tx, mut rx) = mpsc::channel::<WsMessage>(CHANNEL_SIZE);
+    let (tx, mut rx) = mpsc::channel::<ServerMessage>(CHANNEL_SIZE);
 
     let session = RendererSession {
         id: renderer_id,
@@ -112,7 +112,7 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
 
 async fn run_session(
     socket: &mut WebSocket,
-    rx: &mut mpsc::Receiver<WsMessage>,
+    rx: &mut mpsc::Receiver<ServerMessage>,
     renderer_id: RendererId,
     registry: &Arc<RendererRegistry>,
 ) {

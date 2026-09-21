@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     error::{AppError, Result},
     handlers::{authorize_target, renderers::parse_renderer_id},
-    models::{GraphicInstance, InstanceId, RenderTarget, RendererMessage, WsMessage},
+    models::{GraphicInstance, InstanceId, RenderTarget, RendererMessage, ServerMessage},
     store::graphics::GraphicStore,
     AppState,
 };
@@ -104,7 +104,7 @@ pub async fn load(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::Load {
+            move |request_id| ServerMessage::Load {
                 request_id,
                 instance_id,
                 graphic_id,
@@ -164,7 +164,7 @@ pub async fn play_action(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::PlayAction {
+            move |request_id| ServerMessage::PlayAction {
                 request_id,
                 instance_id,
                 goto,
@@ -222,7 +222,7 @@ pub async fn stop_action(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::StopAction {
+            move |request_id| ServerMessage::StopAction {
                 request_id,
                 instance_id,
                 skip_animation,
@@ -279,7 +279,7 @@ pub async fn update_action(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::UpdateAction {
+            move |request_id| ServerMessage::UpdateAction {
                 request_id,
                 instance_id,
                 data,
@@ -337,7 +337,7 @@ pub async fn custom_action(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::CustomAction {
+            move |request_id| ServerMessage::CustomAction {
                 request_id,
                 instance_id,
                 action_id,
@@ -385,7 +385,7 @@ pub async fn renderer_custom_action(
         .renderers
         .send_and_await(
             id,
-            move |request_id| WsMessage::RendererCustomAction {
+            move |request_id| ServerMessage::RendererCustomAction {
                 request_id,
                 action_id,
                 payload,
@@ -466,7 +466,7 @@ pub async fn clear(
             .renderers
             .send_and_await(
                 id,
-                move |request_id| WsMessage::Clear {
+                move |request_id| ServerMessage::Clear {
                     request_id,
                     instance_id,
                 },

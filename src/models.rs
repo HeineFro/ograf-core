@@ -97,7 +97,7 @@ pub struct RendererInfo {
 /// and return the real statusCode/statusMessage, per the OGraf spec.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum WsMessage {
+pub enum ServerMessage {
     Load {
         #[serde(rename = "requestId")]
         request_id: Uuid,
@@ -164,6 +164,10 @@ pub enum WsMessage {
         instance_id: InstanceId,
     },
 }
+
+/// Deprecated: Use `ServerMessage` instead. This alias will be removed in 0.3.0.
+#[deprecated(since = "0.2.0", note = "renamed to ServerMessage for consistency with RendererMessage")]
+pub type WsMessage = ServerMessage;
 
 /// Messages received from a renderer over its WebSocket.
 #[derive(Debug, Clone, Deserialize)]
@@ -261,7 +265,7 @@ pub enum RendererMessage {
     },
 }
 
-impl WsMessage {
+impl ServerMessage {
     /// Smart constructor for PlayAction with `goto` — makes invalid state
     /// (both goto and delta set) unrepresentable.
     pub fn play_goto(
@@ -270,7 +274,7 @@ impl WsMessage {
         goto: f64,
         skip_animation: Option<bool>,
     ) -> Self {
-        WsMessage::PlayAction {
+        ServerMessage::PlayAction {
             request_id,
             instance_id,
             goto: Some(goto),
@@ -287,7 +291,7 @@ impl WsMessage {
         delta: f64,
         skip_animation: Option<bool>,
     ) -> Self {
-        WsMessage::PlayAction {
+        ServerMessage::PlayAction {
             request_id,
             instance_id,
             goto: None,
@@ -303,7 +307,7 @@ impl WsMessage {
         instance_id: InstanceId,
         skip_animation: Option<bool>,
     ) -> Self {
-        WsMessage::PlayAction {
+        ServerMessage::PlayAction {
             request_id,
             instance_id,
             goto: None,

@@ -7,7 +7,7 @@ use crate::{
     error::{AppError, Result},
     models::{
         GraphicInstance, InstanceId, InstanceState, RenderTarget, RendererId, RendererInfo,
-        RendererMessage, WsMessage,
+        RendererMessage, ServerMessage,
     },
 };
 
@@ -17,10 +17,10 @@ pub struct RendererSession {
     pub connected_at: chrono::DateTime<Utc>,
     pub render_target: RenderTarget,
     pub render_target_schema: Option<serde_json::Value>,
-    pub sender: mpsc::Sender<WsMessage>,
+    pub sender: mpsc::Sender<ServerMessage>,
     pub instances: HashMap<InstanceId, GraphicInstance>,
     /// Requests awaiting a correlated reply from this renderer, keyed by the
-    /// `requestId` sent out on the WsMessage.
+    /// `requestId` sent out on the ServerMessage.
     pub pending: HashMap<Uuid, oneshot::Sender<RendererMessage>>,
 }
 
@@ -69,7 +69,7 @@ impl RendererRegistry {
     pub async fn send_and_await(
         &self,
         renderer_id: RendererId,
-        build: impl FnOnce(Uuid) -> WsMessage,
+        build: impl FnOnce(Uuid) -> ServerMessage,
         timeout: Duration,
     ) -> Result<RendererMessage> {
         let request_id = Uuid::new_v4();
