@@ -107,6 +107,21 @@ Added to `GET /renderers/:id/target` response:
 - **Rationale**: Access control happens at renderer level, not graphic level
 - **Breaking**: No - spec doesn't mandate graphics access control
 
+### 5. RenderTarget "name" Field (v0.2.0+)
+- **Location**: `GET /renderers/:id/target` response
+- **Behavior**: The `name` field uses the renderer's human-readable name (from `hello` message) instead of stringified `renderTarget` JSON
+- **Example**: 
+  - Before v0.2.0: `"name": "{\"channel\":1,\"layer\":10}"`
+  - v0.2.0+: `"name": "Main Output"`
+- **Rationale**: More meaningful labels for multi-machine deployments where human-readable names matter more than JSON structure
+- **Breaking**: No - field already existed, only value changed. OGraf spec doesn't mandate the format of this field.
+
+### 6. Graphics List Caching (v0.2.0+)
+- **Behavior**: Graphics list is cached in memory for configurable TTL (default 30s)
+- **Configuration**: `OGRAF_GRAPHICS_CACHE_TTL_SECS` environment variable (0 = disabled)
+- **Observable**: Graphics changes may not appear immediately (up to TTL delay)
+- **Breaking**: No - purely internal optimization, doesn't affect wire format
+
 ## Storage
 
 Graphics are stored on disk at `OGRAF_STORAGE` (default: `./graphics`):
@@ -122,6 +137,11 @@ Any directory with a `*.ograf.json` file is a valid graphic. The directory name 
 
 ## Compliance Summary
 
-✅ **Full OGraf v1 Server API compliance** with additive, non-breaking extensions for improved observability.
+✅ **Full OGraf v1 Server API compliance** (as of v0.2.0) with additive, non-breaking extensions for improved observability and performance.
 
 All core endpoints, WebSocket messages, and behaviors match the official specification. Extensions are opt-in (clients can ignore extra fields) and don't affect spec-compliant clients or renderers.
+
+**Version compatibility:**
+- Wire protocol (WebSocket): 100% backward compatible across all 0.x versions
+- HTTP REST API: Additive only (new optional fields, no removals)
+- Breaking changes are limited to internal Rust API (library consumers), never wire format
