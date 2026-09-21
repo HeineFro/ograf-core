@@ -456,7 +456,7 @@ pub async fn clear(
     let to_clear: Vec<InstanceId> = info
         .instances
         .iter()
-        .filter(|inst| body.filters.is_empty() || body.filters.iter().any(|f| f.matches(&target, *inst)))
+        .filter(|inst| body.filters.is_empty() || body.filters.iter().any(|f| f.matches(&target, inst)))
         .map(|inst| inst.instance_id)
         .collect();
 
