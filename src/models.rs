@@ -261,6 +261,58 @@ pub enum RendererMessage {
     },
 }
 
+impl WsMessage {
+    /// Smart constructor for PlayAction with `goto` — makes invalid state
+    /// (both goto and delta set) unrepresentable.
+    pub fn play_goto(
+        request_id: Uuid,
+        instance_id: InstanceId,
+        goto: f64,
+        skip_animation: Option<bool>,
+    ) -> Self {
+        WsMessage::PlayAction {
+            request_id,
+            instance_id,
+            goto: Some(goto),
+            delta: None,
+            skip_animation,
+        }
+    }
+
+    /// Smart constructor for PlayAction with `delta` — makes invalid state
+    /// (both goto and delta set) unrepresentable.
+    pub fn play_delta(
+        request_id: Uuid,
+        instance_id: InstanceId,
+        delta: f64,
+        skip_animation: Option<bool>,
+    ) -> Self {
+        WsMessage::PlayAction {
+            request_id,
+            instance_id,
+            goto: None,
+            delta: Some(delta),
+            skip_animation,
+        }
+    }
+
+    /// Smart constructor for PlayAction with neither goto nor delta —
+    /// continues from current step.
+    pub fn play_continue(
+        request_id: Uuid,
+        instance_id: InstanceId,
+        skip_animation: Option<bool>,
+    ) -> Self {
+        WsMessage::PlayAction {
+            request_id,
+            instance_id,
+            goto: None,
+            delta: None,
+            skip_animation,
+        }
+    }
+}
+
 impl RendererMessage {
     /// The correlation id this message is a reply to, if any (`Hello`/`Ping`
     /// carry none since nothing on the server side is awaiting them).
