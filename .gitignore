@@ -17,6 +17,7 @@ Thumbs.db
 *.md
 !README.md
 !SPEC_COMPLIANCE.md
+!CHANGELOG.md
 
 # Development/maintenance docs (keep local only)
 RELEASE.md
