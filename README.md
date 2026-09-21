@@ -1,6 +1,6 @@
 # ograf-core
 
-A pure, unauthenticated Rust implementation of the [OGraf](https://ograf.ebu.io/)
+A Rust implementation of the [OGraf](https://ograf.ebu.io/)
 graphics-control HTTP + WebSocket API. 
 
 ## Design
@@ -12,7 +12,7 @@ implementation, [`AllowAllAccessControl`](src/access.rs), that imposes no
 restriction at all.
 
 This is a deliberate Dependency Inversion seam: `ograf-core` depends on
-nothing outside this crate and knows nothing about zones, tenants, or
+nothing outside this crate and knows nothing about tenants, or
 credentials. A consumer that wants real access control (zones, per-vendor
 API keys, encrypted renderer tokens, ...) implements `AccessControl` in its
 own crate and links `ograf-core` as a library — it never needs to fork or
@@ -105,7 +105,7 @@ If a renderer's `playActionResult` contains a non-numeric `currentStep`, it defa
 
 ## Status
 
-**Early-stage (0.1.0)** — Spec-compliant but not yet battle-tested in production.
+**Early-stage (0.2.0)** — Spec-compliant but not yet battle-tested in production.
 
 This is a library implementation of the OGraf v1 spec. Consumers implement their own access control via the `AccessControl` trait.
 
@@ -114,10 +114,8 @@ This is a library implementation of the OGraf v1 spec. Consumers implement their
 ## Learn More About OGraf
 
 - **[OGraf Specification](https://ograf.ebu.io/)** — Official EBU specification
-- **[SuperFly.tv](https://github.com/SuperFlyTV)** — OGraf tooling and TypeScript server implementation
-- **[Streamshapers](https://streamshapers.com/)** — Professional OGraf solutions and services
 
-Questions or feedback? [Open an issue](https://github.com/HeineFro/ograf-core/issues) on GitHub.
+Questions or feedback? [Open an issue](https://github.com/HeineFro/ograf-core/issues) on GitHub. or write a pm.
 
 ## License
 
