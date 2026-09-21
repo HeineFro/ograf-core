@@ -124,14 +124,19 @@ impl RendererRegistry {
 }
 
 fn apply_result(session: &mut RendererSession, message: &RendererMessage) {
+    // Only update state on success — Composed Method pattern makes this
+    // rule explicit rather than repeating `if status_code < 400` in each arm.
+    if !message.is_success() {
+        return;
+    }
+
     match message {
         RendererMessage::LoadResult {
             instance_id,
             graphic_id,
             data,
-            status_code,
             ..
-        } if *status_code < 400 => {
+        } => {
             session.instances.insert(
                 *instance_id,
                 GraphicInstance {
@@ -146,39 +151,29 @@ fn apply_result(session: &mut RendererSession, message: &RendererMessage) {
         }
         RendererMessage::PlayActionResult {
             instance_id,
-            status_code,
             current_step,
             ..
-        } if *status_code < 400 => {
+        } => {
             if let Some(instance) = session.instances.get_mut(instance_id) {
                 instance.state = InstanceState::Playing;
                 instance.current_step = Some(*current_step);
             }
         }
-        RendererMessage::StopActionResult {
-            instance_id,
-            status_code,
-            ..
-        } if *status_code < 400 => {
+        RendererMessage::StopActionResult { instance_id, .. } => {
             if let Some(instance) = session.instances.get_mut(instance_id) {
                 instance.state = InstanceState::Stopped;
             }
         }
         RendererMessage::UpdateActionResult {
             instance_id,
-            status_code,
             data: Some(data),
             ..
-        } if *status_code < 400 => {
+        } => {
             if let Some(instance) = session.instances.get_mut(instance_id) {
                 instance.data = Some(data.clone());
             }
         }
-        RendererMessage::ClearResult {
-            instance_id,
-            status_code,
-            ..
-        } if *status_code < 400 => {
+        RendererMessage::ClearResult { instance_id, .. } => {
             session.instances.remove(instance_id);
         }
         _ => {}

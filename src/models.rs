@@ -276,4 +276,19 @@ impl RendererMessage {
             RendererMessage::Hello { .. } | RendererMessage::Ping => None,
         }
     }
+
+    /// Whether this result message indicates success (status_code < 400).
+    /// Returns `false` for Hello/Ping which carry no status code.
+    pub fn is_success(&self) -> bool {
+        match self {
+            RendererMessage::LoadResult { status_code, .. }
+            | RendererMessage::PlayActionResult { status_code, .. }
+            | RendererMessage::StopActionResult { status_code, .. }
+            | RendererMessage::UpdateActionResult { status_code, .. }
+            | RendererMessage::CustomActionResult { status_code, .. }
+            | RendererMessage::RendererCustomActionResult { status_code, .. }
+            | RendererMessage::ClearResult { status_code, .. } => *status_code < 400,
+            RendererMessage::Hello { .. } | RendererMessage::Ping => false,
+        }
+    }
 }
