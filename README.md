@@ -141,7 +141,7 @@ If a renderer's `playActionResult` contains a non-numeric `currentStep`, it defa
 
 ## Status
 
-**Early-stage (0.3.0)** — Spec-compliant but not yet battle-tested in production.
+**Early-stage (0.4.0)** — Spec-compliant but not yet battle-tested in production.
 
 This is a library implementation of the OGraf v1 spec. Consumers implement their own access control via the `AccessControl` trait.
 
