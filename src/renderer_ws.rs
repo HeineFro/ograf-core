@@ -52,6 +52,8 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         sender: tx,
         instances: HashMap::new(),
         pending: HashMap::new(),
+        messages_sent: std::sync::atomic::AtomicU64::new(0),
+        messages_received: std::sync::atomic::AtomicU64::new(0),
     };
 
     state.renderers.register(session).await;

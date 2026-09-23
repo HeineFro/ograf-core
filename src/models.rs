@@ -37,6 +37,18 @@ impl Graphic {
     }
 }
 
+/// Metrics for a renderer connection (extension, not part of OGraf spec).
+/// Added to RendererInfo response to provide observability without requiring
+/// a separate metrics endpoint.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RendererMetrics {
+    pub pending_requests: usize,
+    pub messages_sent: u64,
+    pub messages_received: u64,
+    pub uptime_seconds: u64,
+}
+
 /// Not part of the OGraf spec itself (the spec has no instance state
 /// machine) — this is Core's own bookkeeping, inferred from which
 /// action last succeeded, purely so dashboards/UIs can show more than
@@ -74,4 +86,8 @@ pub struct RendererInfo {
     /// one, in which case callers fall back to a generic placeholder.
     pub render_target_schema: Option<Value>,
     pub instances: Vec<GraphicInstance>,
+    /// Optional metrics for observability (extension, not part of OGraf spec).
+    /// Only populated if metrics tracking is enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<RendererMetrics>,
 }
