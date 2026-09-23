@@ -7,7 +7,7 @@ pub type RendererId = Uuid;
 
 // Re-export protocol types for backward compatibility
 pub use crate::protocol::{
-    InstanceId, InstanceSnapshot, RenderTarget, RendererMessage, ServerMessage, WsMessage,
+    InstanceId, InstanceSnapshot, RenderTarget, RendererMessage, ServerMessage,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

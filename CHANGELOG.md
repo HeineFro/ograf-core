@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-23
+
+### Breaking Changes
+
+- **Removed `WsMessage` deprecated type alias** - The alias was deprecated in 0.2.0 and is now removed. Use `ServerMessage` instead.
+
+  **Migration:**
+  ```rust
+  // Before
+  use ograf_core::models::WsMessage;
+  
+  // After
+  use ograf_core::models::ServerMessage;
+  ```
+
+### Added
+
+- **Access control extensions** - Added two new methods to the `AccessControl` trait with default implementations (maintaining backward compatibility):
+  - `filter_graphics()` - Graphics-level access control for `GET /graphics`. Default implementation returns all graphics.
+  - `can_load_graphic()` - Per-graphic load authorization checked before `load()` sends a LoadMessage. Default implementation allows all loads.
+  
+  **Impact:** Enables zone/role-based graphics visibility and renderer-specific graphic restrictions in custom `AccessControl` implementations.
+
+- **Renderer reconnect state resync** - Renderers can now send an optional `instances` array in their `Hello` message to resync Core's view of loaded instances after reconnect. Each instance snapshot includes `instanceId`, `graphicId`, `data`, and `currentStep`. Core infers `InstanceState` from `currentStep` (Playing if set, Loaded otherwise).
+  
+  **Use case:** Seamless renderer reconnect after network blips or Core restarts without losing instance state.
+
+- **Inline renderer metrics** - `RendererInfo` now includes an optional `metrics` field with:
+  - `pendingRequests` - Current number of in-flight renderer requests
+  - `messagesSent` / `messagesReceived` - Cumulative WebSocket message counts
+  - `uptimeSeconds` - Renderer connection uptime
+  
+  **Impact:** Observability without requiring a separate metrics endpoint.
+
+- **Health check endpoint** - Added `GET /ograf/v1/health` endpoint returning `{"status": "ok"}`. No authentication required (designed for load balancers and orchestrators).
+
+### Security
+
+- **Bounded pending requests** - Renderer sessions now reject new requests when `pending.len() >= max_pending` (default: 100, configurable via `OGRAF_RENDERER_MAX_PENDING`). Returns `429 Too Many Requests` instead of unbounded memory growth.
+  
+  **Impact:** DoS protection against renderer request flooding.
+
+- **Sanitized internal error messages** - `AppError::Internal` errors now return a generic "Internal server error" message to users instead of leaking file paths and stack traces. Full errors are logged server-side for debugging.
+
+- **Log injection prevention** - Renderer-provided strings (name, render target) are sanitized before logging by filtering control characters and limiting length to 100 characters.
+
+### Dependencies
+
+- No new dependencies
+
+### Internal
+
+- Metrics tracking uses `AtomicU64` for thread-safe counters without locks
+- Added `InstanceSnapshot` wire protocol type for reconnect state resync
+- `RendererRegistry` constructor changes:
+  - `new()` now calls `Default` (backward compatible)
+  - Added `with_max_pending(usize)` for custom limits
+
 ## [0.2.0] - 2026-09-21
 
 ### Breaking Changes
@@ -91,7 +149,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency Inversion via `AccessControl` trait
 - Extensions: `InstanceState` tracking, lenient `currentStep` parsing
 
-[Unreleased]: https://github.com/HeineFro/ograf-core/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/HeineFro/ograf-core/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HeineFro/ograf-core/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HeineFro/ograf-core/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/HeineFro/ograf-core/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/HeineFro/ograf-core/releases/tag/v0.1.0

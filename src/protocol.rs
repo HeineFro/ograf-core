@@ -299,7 +299,3 @@ impl RendererMessage {
         }
     }
 }
-
-/// Deprecated: Use `ServerMessage` instead. This alias will be removed in 0.3.0.
-#[deprecated(since = "0.2.0", note = "renamed to ServerMessage for consistency with RendererMessage")]
-pub type WsMessage = ServerMessage;
