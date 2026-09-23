@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, Result},
-    handlers::{authorize_target, renderers::parse_renderer_id},
+    handlers::{api_key_from, authorize_target, renderers::parse_renderer_id},
     models::{GraphicInstance, InstanceId, RenderTarget, RendererMessage, ServerMessage},
     store::graphics::GraphicStore,
     AppState,
@@ -95,6 +95,15 @@ pub async fn load(
     GraphicStore::new(&state.config.graphics_storage)
         .get(&body.graphic_id)
         .await?;
+
+    // Check per-graphic load authorization (Wish 2: can_load_graphic)
+    let api_key = api_key_from(&headers);
+    if !state.access.can_load_graphic(&api_key, &info.name, &body.graphic_id).await {
+        return Err(AppError::Forbidden(format!(
+            "not authorized to load graphic '{}' on renderer '{}'",
+            body.graphic_id, info.name
+        )));
+    }
 
     let instance_id = Uuid::new_v4();
     let graphic_id = body.graphic_id;

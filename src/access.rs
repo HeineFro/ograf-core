@@ -36,6 +36,19 @@ pub trait AccessControl: Send + Sync {
     /// stop/update/customAction/clear). Keyed on the stable *name*, not the
     /// per-session `id`.
     async fn can_target(&self, api_key: &str, renderer_name: &str) -> bool;
+
+    /// Whether `api_key` may load `graphic_id` onto `renderer_name` — checked
+    /// before load() sends a LoadMessage. Default implementation allows all
+    /// loads (maintaining backward compatibility), but implementations can
+    /// enforce zone/renderer-specific graphic restrictions.
+    async fn can_load_graphic(
+        &self,
+        _api_key: &str,
+        _renderer_name: &str,
+        _graphic_id: &str,
+    ) -> bool {
+        true
+    }
 }
 
 /// No restriction at all — every renderer visible, every key can target
