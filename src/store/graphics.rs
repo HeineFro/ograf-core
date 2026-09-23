@@ -37,7 +37,10 @@ pub struct GraphicStore {
 /// `..`/`/`) once it passes this. Enforced here since every other caller
 /// (read/thumbnail/asset/delete) trusts whatever's in the URL.
 pub fn is_valid_graphic_id(id: &str) -> bool {
-    !id.is_empty() && id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 /// Joins `rel` onto `base` component-by-component, rejecting `..` and

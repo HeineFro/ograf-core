@@ -103,7 +103,8 @@ impl RendererRegistry {
         // so one busy renderer doesn't stall commands to other renderers
         // (assuming they hash to different shards).
         let sender = {
-            let mut session = self.sessions
+            let mut session = self
+                .sessions
                 .get_mut(&renderer_id)
                 .ok_or_else(|| AppError::RendererNotConnected(renderer_id.to_string()))?;
 
@@ -141,7 +142,12 @@ impl RendererRegistry {
     /// Applies a renderer-confirmed result to session state (so GET renderer
     /// endpoints reflect renderer-confirmed truth, not what was merely sent)
     /// and wakes up the HTTP handler awaiting it via `send_and_await`, if any.
-    pub async fn resolve(&self, renderer_id: RendererId, request_id: Uuid, message: RendererMessage) {
+    pub async fn resolve(
+        &self,
+        renderer_id: RendererId,
+        request_id: Uuid,
+        message: RendererMessage,
+    ) {
         if let Some(mut session) = self.sessions.get_mut(&renderer_id) {
             session.messages_received.fetch_add(1, Ordering::Relaxed);
             apply_result(&mut session, &message);
@@ -219,7 +225,9 @@ fn session_to_info(s: &RendererSession) -> RendererInfo {
     let mut instances: Vec<_> = s.instances.values().cloned().collect();
     instances.sort_by(|a, b| b.loaded_at.cmp(&a.loaded_at));
 
-    let uptime_seconds = s.connected_at.signed_duration_since(Utc::now())
+    let uptime_seconds = s
+        .connected_at
+        .signed_duration_since(Utc::now())
         .num_seconds()
         .unsigned_abs();
 

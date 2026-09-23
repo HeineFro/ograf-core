@@ -19,7 +19,10 @@ use crate::{
     AppState,
 };
 
-pub async fn list_renderers(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>> {
+pub async fn list_renderers(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>> {
     let api_key = api_key_from(&headers);
     let all = state.renderers.list_info().await;
     let visible = state.access.filter_visible(&api_key, all).await;

@@ -20,9 +20,14 @@ use crate::{
 // "unscoped by design" behavior), but implementations can restrict visibility
 // based on zones, roles, or other policies.
 
-pub async fn list_graphics(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>> {
+pub async fn list_graphics(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>> {
     let api_key = api_key_from(&headers);
-    let all_graphics = GraphicStore::new(&state.config.graphics_storage).list().await?;
+    let all_graphics = GraphicStore::new(&state.config.graphics_storage)
+        .list()
+        .await?;
     let visible = state.access.filter_graphics(&api_key, all_graphics).await;
     let list: Vec<Value> = visible.iter().map(Graphic::list_info).collect();
     Ok(Json(json!({ "graphics": list })))
@@ -32,7 +37,9 @@ pub async fn get_graphic(
     State(state): State<AppState>,
     Path(graphic_id): Path<String>,
 ) -> Result<Json<Value>> {
-    let graphic = GraphicStore::new(&state.config.graphics_storage).get(&graphic_id).await?;
+    let graphic = GraphicStore::new(&state.config.graphics_storage)
+        .get(&graphic_id)
+        .await?;
     Ok(Json(json!({
         "graphic": graphic.manifest,
         "metadata": {
@@ -92,7 +99,10 @@ pub async fn serve_graphic_asset(
     State(state): State<AppState>,
     Path((graphic_id, asset_path)): Path<(String, String)>,
 ) -> Response {
-    let storage_path = match GraphicStore::new(&state.config.graphics_storage).get(&graphic_id).await {
+    let storage_path = match GraphicStore::new(&state.config.graphics_storage)
+        .get(&graphic_id)
+        .await
+    {
         Ok(graphic) => graphic.storage_path,
         Err(_) => return StatusCode::NOT_FOUND.into_response(),
     };

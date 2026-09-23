@@ -92,7 +92,10 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
     };
 
     state.renderers.register(session).await;
-    state.access.on_renderer_connected(&hello.name, &query).await;
+    state
+        .access
+        .on_renderer_connected(&hello.name, &query)
+        .await;
 
     let welcome = serde_json::json!({ "type": "welcome", "rendererId": renderer_id });
     if socket
@@ -135,7 +138,10 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 })
             }
             Ok(_) => {
-                tracing::warn!("renderer's first message wasn't hello: {}", sanitize_for_logs(&text));
+                tracing::warn!(
+                    "renderer's first message wasn't hello: {}",
+                    sanitize_for_logs(&text)
+                );
                 None
             }
             Err(err) => {

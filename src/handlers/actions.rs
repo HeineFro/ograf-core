@@ -98,7 +98,11 @@ pub async fn load(
 
     // Check per-graphic load authorization (Wish 2: can_load_graphic)
     let api_key = api_key_from(&headers);
-    if !state.access.can_load_graphic(&api_key, &info.name, &body.graphic_id).await {
+    if !state
+        .access
+        .can_load_graphic(&api_key, &info.name, &body.graphic_id)
+        .await
+    {
         return Err(AppError::Forbidden(format!(
             "not authorized to load graphic '{}' on renderer '{}'",
             body.graphic_id, info.name
@@ -465,7 +469,9 @@ pub async fn clear(
     let to_clear: Vec<InstanceId> = info
         .instances
         .iter()
-        .filter(|inst| body.filters.is_empty() || body.filters.iter().any(|f| f.matches(&target, inst)))
+        .filter(|inst| {
+            body.filters.is_empty() || body.filters.iter().any(|f| f.matches(&target, inst))
+        })
         .map(|inst| inst.instance_id)
         .collect();
 

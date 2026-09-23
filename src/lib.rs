@@ -42,12 +42,24 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health", get(handlers::health))
         .route("/graphics", get(handlers::graphics::list_graphics))
         .route("/graphics/:id", get(handlers::graphics::get_graphic))
-        .route("/graphics/:id/assets/*path", get(handlers::graphics::serve_graphic_asset))
-        .route("/graphics/:id/thumbnail", get(handlers::graphics::get_thumbnail))
-        .route("/renderers/connect", get(handlers::renderers::connect_renderer))
+        .route(
+            "/graphics/:id/assets/*path",
+            get(handlers::graphics::serve_graphic_asset),
+        )
+        .route(
+            "/graphics/:id/thumbnail",
+            get(handlers::graphics::get_thumbnail),
+        )
+        .route(
+            "/renderers/connect",
+            get(handlers::renderers::connect_renderer),
+        )
         .route("/renderers", get(handlers::renderers::list_renderers))
         .route("/renderers/:id", get(handlers::renderers::get_renderer))
-        .route("/renderers/:id/target", get(handlers::renderers::get_target))
+        .route(
+            "/renderers/:id/target",
+            get(handlers::renderers::get_target),
+        )
         .route(
             "/renderers/:id/customActions/:action_id",
             post(handlers::actions::renderer_custom_action),

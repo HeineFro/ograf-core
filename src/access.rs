@@ -22,7 +22,11 @@ pub trait AccessControl: Send + Sync {
     async fn on_renderer_connected(&self, name: &str, query: &str);
 
     /// Filters `renderers` down to what `api_key` may see — `GET /renderers`.
-    async fn filter_visible(&self, api_key: &str, renderers: Vec<RendererInfo>) -> Vec<RendererInfo>;
+    async fn filter_visible(
+        &self,
+        api_key: &str,
+        renderers: Vec<RendererInfo>,
+    ) -> Vec<RendererInfo>;
 
     /// Filters `graphics` down to what `api_key` may see — `GET /graphics`.
     /// Default implementation returns all graphics (no filtering), maintaining
@@ -64,7 +68,11 @@ impl AccessControl for AllowAllAccessControl {
 
     async fn on_renderer_connected(&self, _name: &str, _query: &str) {}
 
-    async fn filter_visible(&self, _api_key: &str, renderers: Vec<RendererInfo>) -> Vec<RendererInfo> {
+    async fn filter_visible(
+        &self,
+        _api_key: &str,
+        renderers: Vec<RendererInfo>,
+    ) -> Vec<RendererInfo> {
         renderers
     }
 

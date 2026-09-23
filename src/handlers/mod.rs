@@ -55,6 +55,9 @@ pub(crate) async fn authorize_target(
     if state.access.can_target(&api_key, &info.name).await {
         Ok(info)
     } else {
-        Err(AppError::Forbidden(format!("no access to renderer '{}'", info.name)))
+        Err(AppError::Forbidden(format!(
+            "no access to renderer '{}'",
+            info.name
+        )))
     }
 }

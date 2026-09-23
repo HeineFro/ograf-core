@@ -36,18 +36,24 @@ impl IntoResponse for AppError {
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::Conflict(_) => (StatusCode::CONFLICT, self.to_string()),
-            AppError::RendererNotConnected(_) => (StatusCode::SERVICE_UNAVAILABLE, self.to_string()),
+            AppError::RendererNotConnected(_) => {
+                (StatusCode::SERVICE_UNAVAILABLE, self.to_string())
+            }
             AppError::Timeout(_) => (StatusCode::GATEWAY_TIMEOUT, self.to_string()),
             AppError::RendererOverloaded(_) => (StatusCode::TOO_MANY_REQUESTS, self.to_string()),
             AppError::GraphicAction { status_code, .. } => {
-                let status = StatusCode::from_u16(*status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                let status =
+                    StatusCode::from_u16(*status_code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                 (status, self.to_string())
             }
             AppError::Internal(err) => {
                 // Log full error internally for debugging
                 tracing::error!("Internal server error: {err:?}");
                 // Return generic message to user (don't leak file paths, etc.)
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
         };
 
