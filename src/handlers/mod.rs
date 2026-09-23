@@ -20,6 +20,15 @@ pub async fn server_info() -> Json<Value> {
     }))
 }
 
+/// Health check endpoint for liveness/readiness probes — always returns 200
+/// OK with `{"status": "ok"}`. No authentication required (by design: a load
+/// balancer or orchestrator needs to check this without credentials).
+pub async fn health() -> Json<Value> {
+    Json(json!({
+        "status": "ok"
+    }))
+}
+
 /// The vendor/controller API key from `X-OGraf-Key`, or empty if absent —
 /// an `AccessControl` implementation decides what an empty key means
 /// (`AllowAllAccessControl` doesn't care; other implementations may reject

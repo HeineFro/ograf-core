@@ -39,6 +39,7 @@ pub fn build_router(state: AppState) -> Router {
 
     let api = Router::new()
         .route("/", get(handlers::server_info))
+        .route("/health", get(handlers::health))
         .route("/graphics", get(handlers::graphics::list_graphics))
         .route("/graphics/:id", get(handlers::graphics::get_graphic))
         .route("/graphics/:id/assets/*path", get(handlers::graphics::serve_graphic_asset))
