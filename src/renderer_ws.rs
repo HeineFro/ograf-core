@@ -8,8 +8,8 @@ use uuid::Uuid;
 
 use crate::{
     models::{
-        GraphicInstance, InstanceSnapshot, InstanceState, RenderTarget, RendererId,
-        RendererMessage, ServerMessage,
+        is_valid_renderer_name, GraphicInstance, InstanceSnapshot, InstanceState, RenderTarget,
+        RendererId, RendererMessage, ServerMessage,
     },
     store::renderers::{RendererRegistry, RendererSession},
     AppState,
@@ -62,11 +62,44 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
     let Some(hello) = wait_for_hello(&mut socket).await else {
         return;
     };
-    let renderer_id = hello.id;
+
+    // Validate renderer name (0.4.0)
+    if !is_valid_renderer_name(&hello.name) {
+        tracing::warn!(
+            "renderer hello with invalid name rejected: '{}'",
+            sanitize_for_logs(&hello.name)
+        );
+        let close_msg = format!("invalid renderer name: must be 1-64 characters, A-Z a-z 0-9 - _ .");
+        let _ = socket
+            .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 1008, // Policy violation
+                reason: close_msg.into(),
+            })))
+            .await;
+        return;
+    }
+
+    // Authorize renderer name (0.4.0: prevent name squatting)
+    if !state.access.authorize_name(&hello.name, &query).await {
+        tracing::warn!(
+            "renderer name authorization failed: '{}'",
+            sanitize_for_logs(&hello.name)
+        );
+        let _ = socket
+            .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 1008, // Policy violation
+                reason: "renderer name not authorized".into(),
+            })))
+            .await;
+        return;
+    }
+
+    let renderer_id = hello.id.clone();
+    let connection_id = Uuid::new_v4(); // Internal ID for cleanup safety
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(CHANNEL_SIZE);
 
-    // Populate instances from Hello snapshots (Wish 3: reconnect state resync)
+    // Populate instances from Hello snapshots (0.3.0: reconnect state resync)
     let instances = hello
         .instances
         .as_ref()
@@ -79,7 +112,7 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         .unwrap_or_default();
 
     let session = RendererSession {
-        id: renderer_id,
+        id: renderer_id.clone(),
         name: hello.name.clone(),
         connected_at: Utc::now(),
         render_target: hello.render_target,
@@ -89,9 +122,21 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         pending: HashMap::new(),
         messages_sent: std::sync::atomic::AtomicU64::new(0),
         messages_received: std::sync::atomic::AtomicU64::new(0),
+        connection_id,
     };
 
-    state.renderers.register(session).await;
+    // Register session (first-wins policy - will fail if name already taken)
+    if let Err(err) = state.renderers.register(session).await {
+        tracing::warn!("renderer registration failed: {err}");
+        let _ = socket
+            .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                code: 1008, // Policy violation
+                reason: "renderer name already connected".into(),
+            })))
+            .await;
+        return;
+    }
+
     state
         .access
         .on_renderer_connected(&hello.name, &query)
@@ -103,12 +148,15 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         .await
         .is_err()
     {
-        state.renderers.unregister(renderer_id).await;
+        state
+            .renderers
+            .unregister(&renderer_id, connection_id)
+            .await;
         return;
     }
 
-    run_session(&mut socket, &mut rx, renderer_id, &state.renderers).await;
-    state.renderers.unregister(renderer_id).await;
+    run_session(&mut socket, &mut rx, &renderer_id, &state.renderers).await;
+    state.renderers.unregister(&renderer_id, connection_id).await;
     tracing::info!("renderer {renderer_id} disconnected");
 }
 
@@ -130,7 +178,7 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 );
                 let render_target_schema = capabilities.get("renderTargetSchema").cloned();
                 Some(Hello {
-                    id: Uuid::new_v4(),
+                    id: name.clone(),  // 0.4.0: name is now the id
                     name,
                     render_target,
                     render_target_schema,
@@ -174,7 +222,7 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
 async fn run_session(
     socket: &mut WebSocket,
     rx: &mut mpsc::Receiver<ServerMessage>,
-    renderer_id: RendererId,
+    renderer_id: &str,
     registry: &Arc<RendererRegistry>,
 ) {
     let mut last_ping = tokio::time::Instant::now();

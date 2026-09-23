@@ -4,11 +4,10 @@ pub mod renderers;
 
 use axum::{http::HeaderMap, Json};
 use serde_json::{json, Value};
-use uuid::Uuid;
 
 use crate::{
     error::{AppError, Result},
-    models::RendererInfo,
+    models::{RendererId, RendererInfo},
     AppState,
 };
 
@@ -45,10 +44,12 @@ pub(crate) fn api_key_from(headers: &HeaderMap) -> String {
 /// fetches the renderer's current info and checks `can_target` before
 /// letting the caller touch it — Tell Don't Ask, callers get a yes/no
 /// answer instead of reaching into the registry themselves to decide.
+///
+/// In 0.4.0+, renderer_id is the renderer's name (RendererId = String).
 pub(crate) async fn authorize_target(
     state: &AppState,
     headers: &HeaderMap,
-    renderer_id: Uuid,
+    renderer_id: &RendererId,
 ) -> Result<RendererInfo> {
     let info = state.renderers.get_info(renderer_id).await?;
     let api_key = api_key_from(headers);

@@ -8,12 +8,11 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
-use uuid::Uuid;
 
 use crate::{
     error::{AppError, Result},
     handlers::{api_key_from, authorize_target},
-    models::{Graphic, RenderTarget, RendererInfo},
+    models::{is_valid_renderer_name, Graphic, RenderTarget, RendererId, RendererInfo},
     renderer_ws,
     store::graphics::GraphicStore,
     AppState,
@@ -39,7 +38,7 @@ pub async fn get_renderer(
     headers: HeaderMap,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     let graphics = load_graphics_by_id(&state).await?;
 
     let render_target_schema = info
@@ -71,7 +70,7 @@ pub async fn get_target(
     headers: HeaderMap,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
 
     let requested: RenderTarget = serde_json::from_str(&query.render_target)
         .map_err(|e| AppError::BadRequest(format!("invalid renderTarget: {e}")))?;
@@ -108,9 +107,16 @@ pub async fn connect_renderer(
     ws.on_upgrade(move |socket| renderer_ws::handle_session(socket, state, query))
 }
 
-pub(crate) fn parse_renderer_id(renderer_id: &str) -> Result<Uuid> {
-    Uuid::parse_str(renderer_id)
-        .map_err(|_| AppError::BadRequest(format!("invalid renderer id: {renderer_id}")))
+/// Validates and returns the renderer name from a URL path parameter.
+/// In 0.4.0+, renderer IDs are names, not UUIDs. Returns 404 for invalid names
+/// (spec: "No Renderer found"), not 400, since an invalid name can't exist.
+pub(crate) fn parse_renderer_id(renderer_id: &str) -> Result<RendererId> {
+    if is_valid_renderer_name(renderer_id) {
+        Ok(renderer_id.to_string())
+    } else {
+        // Invalid name format → can't exist → 404, not 400
+        Err(AppError::NotFound(format!("renderer '{renderer_id}'")))
+    }
 }
 
 pub(crate) async fn load_graphics_by_id(state: &AppState) -> Result<HashMap<String, Graphic>> {

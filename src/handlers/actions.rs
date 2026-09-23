@@ -88,7 +88,7 @@ pub async fn load(
     Json(body): Json<LoadRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
 
     // 404s if the graphic doesn't exist, per spec.
@@ -116,7 +116,7 @@ pub async fn load(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::Load {
                 request_id,
                 instance_id,
@@ -164,7 +164,7 @@ pub async fn play_action(
     Json(body): Json<PlayActionRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
     ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
 
@@ -176,7 +176,7 @@ pub async fn play_action(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::PlayAction {
                 request_id,
                 instance_id,
@@ -224,7 +224,7 @@ pub async fn stop_action(
     Json(body): Json<StopActionRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
     ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
 
@@ -234,7 +234,7 @@ pub async fn stop_action(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::StopAction {
                 request_id,
                 instance_id,
@@ -280,7 +280,7 @@ pub async fn update_action(
     Json(body): Json<UpdateActionRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
     ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
 
@@ -291,7 +291,7 @@ pub async fn update_action(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::UpdateAction {
                 request_id,
                 instance_id,
@@ -338,7 +338,7 @@ pub async fn custom_action(
     Json(body): Json<CustomActionRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
     ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
 
@@ -349,7 +349,7 @@ pub async fn custom_action(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::CustomAction {
                 request_id,
                 instance_id,
@@ -389,7 +389,7 @@ pub async fn renderer_custom_action(
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
     // Ensures a clear 404/403 if the renderer id is unknown or off-limits.
-    authorize_target(&state, &headers, id).await?;
+    authorize_target(&state, &headers, &id).await?;
 
     let payload = body.payload;
     let skip_animation = body.skip_animation;
@@ -397,7 +397,7 @@ pub async fn renderer_custom_action(
     let reply = state
         .renderers
         .send_and_await(
-            id,
+            &id,
             move |request_id| ServerMessage::RendererCustomAction {
                 request_id,
                 action_id,
@@ -463,7 +463,7 @@ pub async fn clear(
     Json(body): Json<ClearRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, id).await?;
+    let info = authorize_target(&state, &headers, &id).await?;
     let target = info.render_target;
 
     let to_clear: Vec<InstanceId> = info
@@ -480,7 +480,7 @@ pub async fn clear(
         let reply = state
             .renderers
             .send_and_await(
-                id,
+                &id,
                 move |request_id| ServerMessage::Clear {
                     request_id,
                     instance_id,

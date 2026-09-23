@@ -15,6 +15,21 @@ pub trait AccessControl: Send + Sync {
     /// zone name + token for `ZoneAccessControl`, ignored entirely here).
     async fn authorize_connect(&self, query: &str) -> bool;
 
+    /// Authorizes the renderer name from `hello`, before the session is registered.
+    /// Called after `authorize_connect` and after name validation, but before
+    /// attempting to register the session. Returning `false` closes the connection
+    /// and never registers it.
+    ///
+    /// Default implementation allows all names (backward compatible). Implementations
+    /// can enforce policies like "name must match query string" or "name must be
+    /// authorized for this zone".
+    ///
+    /// Added in 0.4.0 to prevent name squatting (connecting with valid query but
+    /// claiming another zone's renderer name in `hello`).
+    async fn authorize_name(&self, _name: &str, _query: &str) -> bool {
+        true
+    }
+
     /// Called once a renderer's `hello` names it, after `authorize_connect`
     /// already approved the connection — a chance to record durable identity
     /// for tracking or failover purposes. Best-effort: Core doesn't drop the

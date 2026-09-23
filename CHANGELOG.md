@@ -7,6 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-23
+
+### Breaking Changes
+
+- **`RendererId` changed from `Uuid` to `String` (renderer's name)** - For OGraf v1 spec compliance and stability across reconnects, renderer IDs are now the renderer's declared name instead of a server-generated UUID.
+  
+  **Impact:**
+  - Renderer IDs remain stable across reconnects (same name = same ID)
+  - Only one live session per renderer name allowed (first-wins policy)
+  - Renderer names must be valid: 1-64 characters, `[A-Za-z0-9._-]`, case-sensitive
+  - Path parameters like `/ograf/v1/renderers/{rendererId}` now accept renderer names instead of UUIDs
+  
+  **Migration:**
+  ```rust
+  // Before (0.3.0)
+  use ograf_core::models::RendererId;  // was Uuid
+  let id: RendererId = Uuid::new_v4();
+  
+  // After (0.4.0)
+  use ograf_core::models::RendererId;  // now String
+  let id: RendererId = "main-output".to_string();
+  
+  // Validate renderer names before use
+  use ograf_core::models::is_valid_renderer_name;
+  assert!(is_valid_renderer_name("main-output"));
+  ```
+
+- **`RendererRegistry::register()` now returns `Result<RendererId>`** - Previously returned `RendererId` unconditionally. Now returns `Err(AppError::Conflict)` if the renderer name is already connected (first-wins policy).
+  
+  **Migration:**
+  ```rust
+  // Before (0.3.0)
+  let id = registry.register(session).await;
+  
+  // After (0.4.0)
+  let id = registry.register(session).await?;  // Handle Err case
+  ```
+
+- **`RendererRegistry::unregister()` now requires `connection_id`** - Signature changed to `unregister(&self, id: &str, connection_id: Uuid)` to prevent race conditions where a late-cleaning-up connection unregisters a different session that took over the name.
+  
+  **Migration:**
+  ```rust
+  // Before (0.3.0)
+  registry.unregister(&renderer_id).await;
+  
+  // After (0.4.0)
+  registry.unregister(&renderer_id, connection_id).await;
+  // (connection_id is the internal Uuid from RendererSession.connection_id)
+  ```
+
+- **`RendererRegistry` method signatures updated** - Methods `get_info()`, `send_and_await()`, and `resolve()` now take `&str` instead of `RendererId` for consistency and to avoid unnecessary clones.
+
+### Added
+
+- **`is_valid_renderer_name()` validation helper** - Public function to validate renderer names before use. Valid names: 1-64 characters, `[A-Za-z0-9._-]`, case-sensitive, URL-safe.
+  
+  ```rust
+  use ograf_core::models::is_valid_renderer_name;
+  
+  assert!(is_valid_renderer_name("main-output"));
+  assert!(is_valid_renderer_name("Renderer_1.backup"));
+  assert!(!is_valid_renderer_name(""));  // too short
+  assert!(!is_valid_renderer_name("renderer with spaces"));  // invalid chars
+  ```
+
+- **`AccessControl::authorize_name()` hook** - New trait method with default implementation (returns `true` for all names). Allows custom implementations to prevent renderer name squatting by unauthorized clients.
+  
+  ```rust
+  async fn authorize_name(&self, name: &str, query: &str) -> bool {
+      // Default implementation allows all names
+      true
+  }
+  ```
+  
+  **Use case:** Implement custom name authorization logic to ensure only authorized clients can claim specific renderer names.
+
+- **`RendererSession.connection_id` field** - Internal `Uuid` for cleanup safety. Ensures a refused or late-cleaning-up connection doesn't unregister a different session that took over the name.
+
+### Migration Guide (0.3.0 → 0.4.0)
+
+#### If you only use the HTTP API (no custom Rust code):
+- Update renderer paths: `/ograf/v1/renderers/{uuid}` → `/ograf/v1/renderers/{renderer-name}`
+- Renderer names must be valid: 1-64 characters, `[A-Za-z0-9._-]`
+- Only one live session per renderer name allowed
+
+#### If you implement `AccessControl`:
+- Add `authorize_name()` implementation if you need renderer name authorization (optional, default allows all names)
+
+#### If you use `RendererRegistry` directly:
+- Handle `register()` returning `Result` (may fail with `Conflict` error)
+- Update `unregister()` calls to pass `connection_id` parameter
+- Update method calls to pass `&str` instead of cloning `RendererId`
+
 ## [0.3.0] - 2026-09-23
 
 ### Breaking Changes

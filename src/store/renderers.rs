@@ -30,6 +30,10 @@ pub struct RendererSession {
     /// Metrics tracking (for observability)
     pub messages_sent: AtomicU64,
     pub messages_received: AtomicU64,
+    /// Internal connection identifier for cleanup safety. Not exposed in API.
+    /// Ensures a refused or late-cleaning-up connection doesn't unregister
+    /// a different session that took over the name.
+    pub(crate) connection_id: Uuid,
 }
 
 pub struct RendererRegistry {
@@ -61,19 +65,36 @@ impl RendererRegistry {
         }
     }
 
-    pub async fn register(&self, session: RendererSession) -> RendererId {
-        let id = session.id;
-        self.sessions.insert(id, session);
-        id
+    /// Registers a renderer session. Returns Ok(id) on success, or Err if
+    /// the name is already in use (first-wins policy). Atomic check-and-insert
+    /// ensures no race conditions with concurrent registration attempts.
+    pub async fn register(&self, session: RendererSession) -> Result<RendererId> {
+        let id = session.id.clone();
+
+        // Atomic check-and-insert: insert only if key doesn't exist (first-wins)
+        use dashmap::mapref::entry::Entry;
+        match self.sessions.entry(id.clone()) {
+            Entry::Vacant(entry) => {
+                entry.insert(session);
+                Ok(id)
+            }
+            Entry::Occupied(_) => Err(AppError::Conflict(format!(
+                "renderer name '{}' already connected",
+                id
+            ))),
+        }
     }
 
-    pub async fn unregister(&self, id: RendererId) {
-        self.sessions.remove(&id);
+    /// Unregisters a renderer session, but only if the connection_id matches.
+    /// This prevents a refused or late-cleaning-up connection from unregistering
+    /// a different session that took over the name.
+    pub async fn unregister(&self, id: &str, connection_id: Uuid) {
+        self.sessions.remove_if(id, |_, session| session.connection_id == connection_id);
     }
 
-    pub async fn get_info(&self, id: RendererId) -> Result<RendererInfo> {
+    pub async fn get_info(&self, id: &str) -> Result<RendererInfo> {
         self.sessions
-            .get(&id)
+            .get(id)
             .map(|entry| session_to_info(&entry))
             .ok_or_else(|| AppError::NotFound(format!("renderer '{id}'")))
     }
@@ -91,7 +112,7 @@ impl RendererRegistry {
     /// is the only way commands reach a renderer — no fire-and-forget.
     pub async fn send_and_await(
         &self,
-        renderer_id: RendererId,
+        renderer_id: &str,
         build: impl FnOnce(Uuid) -> ServerMessage,
         timeout: Duration,
     ) -> Result<RendererMessage> {
@@ -105,7 +126,7 @@ impl RendererRegistry {
         let sender = {
             let mut session = self
                 .sessions
-                .get_mut(&renderer_id)
+                .get_mut(renderer_id)
                 .ok_or_else(|| AppError::RendererNotConnected(renderer_id.to_string()))?;
 
             // Check if renderer has too many pending requests (DoS protection)
@@ -131,7 +152,7 @@ impl RendererRegistry {
             Ok(Ok(reply)) => Ok(reply),
             Ok(Err(_)) => Err(AppError::RendererNotConnected(renderer_id.to_string())),
             Err(_) => {
-                if let Some(mut session) = self.sessions.get_mut(&renderer_id) {
+                if let Some(mut session) = self.sessions.get_mut(renderer_id) {
                     session.pending.remove(&request_id);
                 }
                 Err(AppError::Timeout(renderer_id.to_string()))
@@ -144,11 +165,11 @@ impl RendererRegistry {
     /// and wakes up the HTTP handler awaiting it via `send_and_await`, if any.
     pub async fn resolve(
         &self,
-        renderer_id: RendererId,
+        renderer_id: &str,
         request_id: Uuid,
         message: RendererMessage,
     ) {
-        if let Some(mut session) = self.sessions.get_mut(&renderer_id) {
+        if let Some(mut session) = self.sessions.get_mut(renderer_id) {
             session.messages_received.fetch_add(1, Ordering::Relaxed);
             apply_result(&mut session, &message);
 
@@ -239,7 +260,7 @@ fn session_to_info(s: &RendererSession) -> RendererInfo {
     };
 
     RendererInfo {
-        id: s.id,
+        id: s.id.clone(),
         name: s.name.clone(),
         connected_at: s.connected_at,
         render_target: s.render_target.clone(),

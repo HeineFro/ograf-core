@@ -1,14 +1,41 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use uuid::Uuid;
 
-pub type RendererId = Uuid;
+/// Renderer identifier - the renderer's stable name.
+/// Changed from Uuid in 0.4.0 for spec compliance and stability across reconnects.
+pub type RendererId = String;
+
+/// Validates a renderer name for use as RendererId.
+///
+/// Valid names: 1-64 characters, A-Z a-z 0-9 - _ .
+/// Case-sensitive, needs no URL escaping in path segments.
+///
+/// # Examples
+/// ```
+/// use ograf_core::models::is_valid_renderer_name;
+///
+/// assert!(is_valid_renderer_name("main-output"));
+/// assert!(is_valid_renderer_name("Renderer_1.backup"));
+/// assert!(!is_valid_renderer_name(""));  // too short
+/// assert!(!is_valid_renderer_name("renderer with spaces"));  // invalid chars
+/// ```
+pub fn is_valid_renderer_name(name: &str) -> bool {
+    let len = name.len();
+    len >= 1
+        && len <= 64
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+}
 
 // Re-export protocol types for backward compatibility
 pub use crate::protocol::{
     InstanceId, InstanceSnapshot, RenderTarget, RendererMessage, ServerMessage,
 };
+
+// Re-export validation helpers for public use
+pub use crate::store::graphics::is_valid_graphic_id;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graphic {
