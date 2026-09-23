@@ -6,7 +6,9 @@ use uuid::Uuid;
 pub type RendererId = Uuid;
 
 // Re-export protocol types for backward compatibility
-pub use crate::protocol::{InstanceId, RenderTarget, RendererMessage, ServerMessage, WsMessage};
+pub use crate::protocol::{
+    InstanceId, InstanceSnapshot, RenderTarget, RendererMessage, ServerMessage, WsMessage,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Graphic {

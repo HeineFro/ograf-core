@@ -7,7 +7,10 @@ use tokio::sync::mpsc;
 use uuid::Uuid;
 
 use crate::{
-    models::{RenderTarget, RendererId, RendererMessage, ServerMessage},
+    models::{
+        GraphicInstance, InstanceSnapshot, InstanceState, RenderTarget, RendererId,
+        RendererMessage, ServerMessage,
+    },
     store::renderers::{RendererRegistry, RendererSession},
     AppState,
 };
@@ -24,11 +27,31 @@ fn sanitize_for_logs(s: &str) -> String {
         .collect()
 }
 
+/// Convert an InstanceSnapshot (from Hello message) to a GraphicInstance.
+/// Sets loaded_at to now and infers state from current_step.
+fn snapshot_to_instance(snapshot: &InstanceSnapshot) -> GraphicInstance {
+    let state = if snapshot.current_step.is_some() {
+        InstanceState::Playing
+    } else {
+        InstanceState::Loaded
+    };
+
+    GraphicInstance {
+        instance_id: snapshot.instance_id,
+        graphic_id: snapshot.graphic_id.clone(),
+        data: snapshot.data.clone(),
+        loaded_at: Utc::now(),
+        state,
+        current_step: snapshot.current_step,
+    }
+}
+
 struct Hello {
     id: RendererId,
     name: String,
     render_target: RenderTarget,
     render_target_schema: Option<Value>,
+    instances: Option<Vec<InstanceSnapshot>>,
 }
 
 /// `query` is the connect URL's raw query string — already used once by
@@ -43,6 +66,18 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
 
     let (tx, mut rx) = mpsc::channel::<ServerMessage>(CHANNEL_SIZE);
 
+    // Populate instances from Hello snapshots (Wish 3: reconnect state resync)
+    let instances = hello
+        .instances
+        .as_ref()
+        .map(|snapshots| {
+            snapshots
+                .iter()
+                .map(|s| (s.instance_id, snapshot_to_instance(s)))
+                .collect()
+        })
+        .unwrap_or_default();
+
     let session = RendererSession {
         id: renderer_id,
         name: hello.name.clone(),
@@ -50,7 +85,7 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         render_target: hello.render_target,
         render_target_schema: hello.render_target_schema,
         sender: tx,
-        instances: HashMap::new(),
+        instances,
         pending: HashMap::new(),
         messages_sent: std::sync::atomic::AtomicU64::new(0),
         messages_received: std::sync::atomic::AtomicU64::new(0),
@@ -81,11 +116,14 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 name,
                 render_target,
                 capabilities,
+                instances,
             }) => {
+                let instance_count = instances.as_ref().map_or(0, |v| v.len());
                 tracing::info!(
-                    "renderer hello: {} (renderTarget: {})",
+                    "renderer hello: {} (renderTarget: {}, instances: {})",
                     sanitize_for_logs(&name),
-                    render_target
+                    render_target,
+                    instance_count
                 );
                 let render_target_schema = capabilities.get("renderTargetSchema").cloned();
                 Some(Hello {
@@ -93,6 +131,7 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                     name,
                     render_target,
                     render_target_schema,
+                    instances,
                 })
             }
             Ok(_) => {

@@ -8,6 +8,22 @@ use uuid::Uuid;
 
 pub type InstanceId = Uuid;
 
+/// Instance state snapshot sent by a renderer during reconnect (Hello message).
+/// Contains the minimal information needed to resync Core's view of what
+/// instances are loaded on the renderer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceSnapshot {
+    #[serde(rename = "instanceId")]
+    pub instance_id: InstanceId,
+    #[serde(rename = "graphicId")]
+    pub graphic_id: String,
+    #[serde(default)]
+    pub data: Option<Value>,
+    #[serde(rename = "currentStep", default)]
+    pub current_step: Option<f64>,
+}
+
 /// Identifies a RenderTarget on a Renderer. Per the OGraf spec, its shape is
 /// defined by each Renderer's own `renderTargetSchema` — Core treats it as
 /// an opaque, shallow JSON object and only ever compares it for equality.
@@ -161,6 +177,11 @@ pub enum RendererMessage {
         render_target: Value,
         #[serde(default)]
         capabilities: Value,
+        /// Optional instance state snapshots for reconnect state resync — if
+        /// present, Core will populate the session's instances from this list
+        /// rather than starting empty (Wish 3: renderer reconnect state resync).
+        #[serde(default)]
+        instances: Option<Vec<InstanceSnapshot>>,
     },
     Ping,
     LoadResult {
