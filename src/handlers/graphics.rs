@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
@@ -9,20 +9,22 @@ use serde_json::{json, Value};
 
 use crate::{
     error::Result,
+    handlers::api_key_from,
     models::Graphic,
     store::graphics::{is_valid_graphic_id, safe_join, GraphicStore},
     AppState,
 };
 
-// Unscoped by design: automation loads a known `graphicId` from its own
-// config, never browses a list, and an operator's controller is tightly
-// coupled to specific templates — hiding templates from a listing wouldn't
-// be a real access boundary. The real one is `can_target` on the renderer a
-// graphic gets loaded onto.
+// Optional access control via `filter_graphics` — the default
+// `AllowAllAccessControl` returns all graphics (maintaining the original
+// "unscoped by design" behavior), but implementations can restrict visibility
+// based on zones, roles, or other policies.
 
-pub async fn list_graphics(State(state): State<AppState>) -> Result<Json<Value>> {
-    let graphics = GraphicStore::new(&state.config.graphics_storage).list().await?;
-    let list: Vec<Value> = graphics.iter().map(Graphic::list_info).collect();
+pub async fn list_graphics(State(state): State<AppState>, headers: HeaderMap) -> Result<Json<Value>> {
+    let api_key = api_key_from(&headers);
+    let all_graphics = GraphicStore::new(&state.config.graphics_storage).list().await?;
+    let visible = state.access.filter_graphics(&api_key, all_graphics).await;
+    let list: Vec<Value> = visible.iter().map(Graphic::list_info).collect();
     Ok(Json(json!({ "graphics": list })))
 }
 

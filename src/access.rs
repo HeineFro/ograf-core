@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::models::RendererInfo;
+use crate::models::{Graphic, RendererInfo};
 
 #[async_trait]
 pub trait AccessControl: Send + Sync {
@@ -23,6 +23,13 @@ pub trait AccessControl: Send + Sync {
 
     /// Filters `renderers` down to what `api_key` may see — `GET /renderers`.
     async fn filter_visible(&self, api_key: &str, renderers: Vec<RendererInfo>) -> Vec<RendererInfo>;
+
+    /// Filters `graphics` down to what `api_key` may see — `GET /graphics`.
+    /// Default implementation returns all graphics (no filtering), maintaining
+    /// backward compatibility and the original "unscoped by design" behavior.
+    async fn filter_graphics(&self, _api_key: &str, graphics: Vec<Graphic>) -> Vec<Graphic> {
+        graphics
+    }
 
     /// Whether `api_key` may target the renderer named `renderer_name` —
     /// checked before every renderer-scoped call (get/target/load/play/
