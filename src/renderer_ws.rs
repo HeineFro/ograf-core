@@ -15,6 +15,15 @@ use crate::{
 const PING_TIMEOUT: Duration = Duration::from_secs(30);
 const CHANNEL_SIZE: usize = 64;
 
+/// Sanitize renderer-provided strings for logging to prevent log injection.
+/// Filters control characters (except space) and limits length.
+fn sanitize_for_logs(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() || *c == ' ')
+        .take(100)
+        .collect()
+}
+
 struct Hello {
     id: RendererId,
     name: String,
@@ -71,7 +80,11 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 render_target,
                 capabilities,
             }) => {
-                tracing::info!("renderer hello: {name} (renderTarget: {render_target})");
+                tracing::info!(
+                    "renderer hello: {} (renderTarget: {})",
+                    sanitize_for_logs(&name),
+                    render_target
+                );
                 let render_target_schema = capabilities.get("renderTargetSchema").cloned();
                 Some(Hello {
                     id: Uuid::new_v4(),
@@ -81,12 +94,13 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 })
             }
             Ok(_) => {
-                tracing::warn!("renderer's first message wasn't hello: {text}");
+                tracing::warn!("renderer's first message wasn't hello: {}", sanitize_for_logs(&text));
                 None
             }
             Err(err) => {
                 tracing::warn!(
-                    "renderer sent an invalid hello (missing/invalid renderTarget?): {err} — raw: {text}"
+                    "renderer sent an invalid hello (missing/invalid renderTarget?): {err} — raw: {}",
+                    sanitize_for_logs(&text)
                 );
                 None
             }

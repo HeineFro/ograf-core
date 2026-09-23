@@ -9,6 +9,7 @@ pub struct Config {
     pub log_level: String,
     pub action_timeout_ms: u64,
     pub graphics_cache_ttl_secs: u64,
+    pub renderer_max_pending: usize,
 }
 
 impl Config {
@@ -29,6 +30,10 @@ impl Config {
                 .unwrap_or_else(|_| "30".into())
                 .parse()
                 .expect("OGRAF_GRAPHICS_CACHE_TTL_SECS must be a valid number"),
+            renderer_max_pending: env::var("OGRAF_RENDERER_MAX_PENDING")
+                .unwrap_or_else(|_| "100".into())
+                .parse()
+                .expect("OGRAF_RENDERER_MAX_PENDING must be a valid number"),
         }
     }
 

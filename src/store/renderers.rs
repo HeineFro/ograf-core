@@ -27,19 +27,31 @@ pub struct RendererSession {
 
 pub struct RendererRegistry {
     sessions: DashMap<RendererId, RendererSession>,
+    max_pending: usize,
 }
 
 impl Default for RendererRegistry {
     fn default() -> Self {
         Self {
             sessions: DashMap::new(),
+            max_pending: 100,
         }
     }
 }
 
 impl RendererRegistry {
+    /// Creates a new RendererRegistry with default settings (max_pending=100).
+    /// Use `with_max_pending()` to customize the limit.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a new RendererRegistry with a custom max pending requests limit.
+    pub fn with_max_pending(max_pending: usize) -> Self {
+        Self {
+            sessions: DashMap::new(),
+            max_pending,
+        }
     }
 
     pub async fn register(&self, session: RendererSession) -> RendererId {
@@ -87,6 +99,16 @@ impl RendererRegistry {
             let mut session = self.sessions
                 .get_mut(&renderer_id)
                 .ok_or_else(|| AppError::RendererNotConnected(renderer_id.to_string()))?;
+
+            // Check if renderer has too many pending requests (DoS protection)
+            if session.pending.len() >= self.max_pending {
+                return Err(AppError::RendererOverloaded(format!(
+                    "Renderer has {} pending requests (max: {})",
+                    session.pending.len(),
+                    self.max_pending
+                )));
+            }
+
             session.pending.insert(request_id, tx);
             session.sender.clone()
         };
