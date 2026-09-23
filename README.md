@@ -1,7 +1,8 @@
 # ograf-core
 
-A Rust implementation of the [OGraf](https://ograf.ebu.io/)
-graphics-control HTTP + WebSocket API. 
+An independent Rust implementation of the [OGraf](https://ograf.ebu.io/) graphics-control HTTP + WebSocket API.
+
+**Note:** This is an unofficial implementation, not affiliated with or endorsed by the EBU. It aims for full spec compliance with the official [OGraf v1 specification](https://ograf.ebu.io/). 
 
 ## Design
 
