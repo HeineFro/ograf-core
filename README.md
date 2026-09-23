@@ -1,8 +1,7 @@
 # ograf-core
 
-An independent Rust implementation of the [OGraf](https://ograf.ebu.io/) graphics-control HTTP + WebSocket API.
-
-**Note:** This is an unofficial implementation, not affiliated with or endorsed by the EBU. It aims for full spec compliance with the official [OGraf v1 specification](https://ograf.ebu.io/). 
+A Rust implementation of the [OGraf](https://ograf.ebu.io/)
+graphics-control HTTP + WebSocket API. 
 
 ## Design
 
@@ -93,8 +92,6 @@ consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 
 `ograf-core` implements the complete [OGraf v1 Server API specification](https://ograf.ebu.io/). All endpoints, WebSocket messages, and behaviors match the official spec (see [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for verification details).
 
-**Note:** While spec-compliant, this is an early-stage implementation (v0.3.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFly.tv/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
-
 ### Non-breaking Extensions
 
 These additions enhance observability and functionality without breaking compatibility with spec-compliant clients or renderers:
@@ -153,7 +150,7 @@ This is a library implementation of the OGraf v1 spec. Consumers implement their
 
 - **[OGraf Specification](https://ograf.ebu.io/)** — Official EBU specification
 
-Questions or feedback? [Open an issue](https://github.com/HeineFro/ograf-core/issues) on GitHub. or write a pm.
+Questions or feedback? [Open an issue](https://github.com/HeineFro/ograf-core/issues) on GitHub or write a pm.
 
 ## License
 
