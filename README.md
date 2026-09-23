@@ -58,6 +58,7 @@ top-level router alongside whatever admin/auth routes your binary adds.
 | `RUST_LOG` | `info` | Log level |
 | `OGRAF_ACTION_TIMEOUT_MS` | `5000` | How long an HTTP action call waits for the renderer's confirmation before failing |
 | `OGRAF_GRAPHICS_CACHE_TTL_SECS` | `30` | Graphics list cache TTL in seconds (0 = disabled, always fetch fresh) |
+| `OGRAF_RENDERER_MAX_PENDING` | `100` | Maximum pending requests per renderer (DoS protection) |
 
 ## Where graphics come from
 
@@ -77,6 +78,7 @@ consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 ## API surface
 
 - `GET /ograf/v1/` — server info
+- `GET /ograf/v1/health` — health check (always returns 200 OK, no auth required)
 - `GET /ograf/v1/graphics`, `GET /ograf/v1/graphics/:id` — list/inspect graphics
 - `GET /ograf/v1/graphics/:id/assets/*path`, `GET /ograf/v1/graphics/:id/thumbnail` — serve graphic assets
 - `GET /ograf/v1/renderers/connect` — renderer WebSocket upgrade
@@ -90,11 +92,11 @@ consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 
 `ograf-core` implements the complete [OGraf v1 Server API specification](https://ograf.ebu.io/). All endpoints, WebSocket messages, and behaviors match the official spec (see [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for verification details).
 
-**Note:** While spec-compliant, this is an early-stage implementation (v0.2.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFly.tv/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
+**Note:** While spec-compliant, this is an early-stage implementation (v0.3.x) not yet proven in production environments. If you prefer TypeScript, check out [SuperFly.tv's ograf-server](https://github.com/SuperFly.tv/ograf-server) — much credit to them for their extensive work on OGraf tooling and the spec itself.
 
 ### Non-breaking Extensions
 
-These additions enhance observability without breaking compatibility with spec-compliant clients or renderers:
+These additions enhance observability and functionality without breaking compatibility with spec-compliant clients or renderers:
 
 #### 1. Instance State Tracking
 The `GET /renderers/:id/target` response includes extra fields for each `GraphicInstance`:
@@ -104,16 +106,43 @@ The `GET /renderers/:id/target` response includes extra fields for each `Graphic
 
 **Rationale**: Helps dashboards and UIs display more than "a graphic is loaded here" without requiring clients to track state themselves.
 
-#### 2. Lenient `currentStep` Parsing
+#### 2. Inline Renderer Metrics (v0.3.0+)
+The `GET /renderers/:id` response includes an optional `metrics` field with:
+- `pendingRequests` — Number of in-flight renderer requests
+- `messagesSent` / `messagesReceived` — Cumulative WebSocket message counts
+- `uptimeSeconds` — Renderer connection uptime
+
+**Rationale**: Observability without requiring a separate metrics endpoint.
+
+#### 3. Renderer Reconnect State Resync (v0.3.0+)
+Renderers can include an optional `instances` array in their `Hello` message to resync Core's view of loaded instances after reconnect. Each instance snapshot includes `instanceId`, `graphicId`, `data`, and `currentStep`.
+
+**Rationale**: Enables seamless renderer reconnect after network blips or Core restarts without losing instance state.
+
+#### 4. AccessControl Extensions (v0.3.0+)
+The `AccessControl` trait includes optional methods for fine-grained access control:
+- `filter_graphics()` — Graphics-level visibility control for `GET /graphics`
+- `can_load_graphic()` — Per-graphic load authorization checked before `load()`
+
+Both have default implementations that allow all access (maintaining backward compatibility). Custom implementations can enforce zone/role-based restrictions.
+
+**Rationale**: Enables multi-tenant deployments with graphics scoped to specific zones or renderers.
+
+#### 5. Lenient `currentStep` Parsing
 If a renderer's `playActionResult` contains a non-numeric `currentStep`, it defaults to `0.0` instead of rejecting the entire message.
 
 **Rationale**: Prevents timeout/failure when a template returns unexpected values. The action still succeeds; only this one field degrades gracefully.
 
-**Compatibility**: Clients can safely ignore all extra fields. Renderers see only standard OGraf messages. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for full details.
+#### 6. Health Check Endpoint (v0.3.0+)
+`GET /ograf/v1/health` always returns `{"status": "ok"}` with 200 OK. No authentication required.
+
+**Rationale**: Standard endpoint for load balancers and orchestrators to check service health.
+
+**Compatibility**: Clients can safely ignore all extra fields. Renderers that don't send `instances` in Hello behave identically to v0.2.x. See [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md) for full details.
 
 ## Status
 
-**Early-stage (0.2.0)** — Spec-compliant but not yet battle-tested in production.
+**Early-stage (0.3.0)** — Spec-compliant but not yet battle-tested in production.
 
 This is a library implementation of the OGraf v1 spec. Consumers implement their own access control via the `AccessControl` trait.
 
