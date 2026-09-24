@@ -7,6 +7,7 @@
 
 pub mod access;
 pub mod config;
+pub mod directory;
 pub mod error;
 pub mod handlers;
 pub mod models;
@@ -18,6 +19,7 @@ use std::sync::Arc;
 
 use access::AccessControl;
 use config::Config;
+use directory::{NoDirectory, RendererDirectory};
 use store::renderers::RendererRegistry;
 
 #[derive(Clone)]
@@ -26,15 +28,23 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub renderers: Arc<RendererRegistry>,
     pub access: Arc<dyn AccessControl>,
+    pub directory: Arc<dyn RendererDirectory>,
 }
 
 impl AppState {
+    /// With [`NoDirectory`] — see [`AppState::with_directory`] to list
+    /// renderers from a consumer's own storage too.
     pub fn new(
         config: Arc<Config>,
         renderers: Arc<RendererRegistry>,
         access: Arc<dyn AccessControl>,
     ) -> Self {
-        Self { config, renderers, access }
+        Self { config, renderers, access, directory: Arc::new(NoDirectory) }
+    }
+
+    pub fn with_directory(mut self, directory: Arc<dyn RendererDirectory>) -> Self {
+        self.directory = directory;
+        self
     }
 }
 

@@ -12,7 +12,7 @@ use crate::{
     error::{AppError, Result},
     models::{
         GraphicInstance, InstanceId, InstanceState, RenderTarget, RendererId, RendererInfo,
-        RendererMessage, RendererMetrics, ServerMessage,
+        RendererMessage, RendererMetrics, RendererStatus, ServerMessage,
     },
 };
 
@@ -22,6 +22,11 @@ pub struct RendererSession {
     pub connected_at: chrono::DateTime<Utc>,
     pub render_target: RenderTarget,
     pub render_target_schema: Option<serde_json::Value>,
+    /// `hello.capabilities.description` / `.customActions` /
+    /// `.renderCharacteristics` — passed through to the spec's RendererInfo.
+    pub description: Option<String>,
+    pub custom_actions: Option<serde_json::Value>,
+    pub render_characteristics: Option<serde_json::Value>,
     pub sender: mpsc::Sender<ServerMessage>,
     pub instances: HashMap<InstanceId, GraphicInstance>,
     /// Requests awaiting a correlated reply from this renderer, keyed by the
@@ -30,23 +35,30 @@ pub struct RendererSession {
     /// Metrics tracking (for observability)
     pub messages_sent: AtomicU64,
     pub messages_received: AtomicU64,
+    /// Set when a request to this renderer times out, cleared by its next
+    /// reply — reported as `status: WARNING`.
+    pub(crate) timed_out: bool,
     /// Internal connection identifier for cleanup safety. Not exposed in API.
     /// Ensures a refused or late-cleaning-up connection doesn't unregister
     /// a different session that took over the name.
     pub(crate) connection_id: Uuid,
 }
 
+/// What's left of a session once it ends — enough to keep listing the
+/// renderer (with `status: ERROR`) until it reconnects.
+struct DepartedRenderer {
+    info: RendererInfo,
+}
+
 pub struct RendererRegistry {
     sessions: DashMap<RendererId, RendererSession>,
+    departed: DashMap<RendererId, DepartedRenderer>,
     max_pending: usize,
 }
 
 impl Default for RendererRegistry {
     fn default() -> Self {
-        Self {
-            sessions: DashMap::new(),
-            max_pending: 100,
-        }
+        Self::with_max_pending(100)
     }
 }
 
@@ -61,6 +73,7 @@ impl RendererRegistry {
     pub fn with_max_pending(max_pending: usize) -> Self {
         Self {
             sessions: DashMap::new(),
+            departed: DashMap::new(),
             max_pending,
         }
     }
@@ -76,6 +89,7 @@ impl RendererRegistry {
         match self.sessions.entry(id.clone()) {
             Entry::Vacant(entry) => {
                 entry.insert(session);
+                self.departed.remove(&id);
                 Ok(id)
             }
             Entry::Occupied(_) => Err(AppError::Conflict(format!(
@@ -88,22 +102,52 @@ impl RendererRegistry {
     /// Unregisters a renderer session, but only if the connection_id matches.
     /// This prevents a refused or late-cleaning-up connection from unregistering
     /// a different session that took over the name.
+    /// The renderer stays listed afterwards, as disconnected.
     pub async fn unregister(&self, id: &str, connection_id: Uuid) {
-        self.sessions.remove_if(id, |_, session| session.connection_id == connection_id);
+        let removed = self
+            .sessions
+            .remove_if(id, |_, session| session.connection_id == connection_id);
+        if let Some((id, session)) = removed {
+            let info = departed_info(&session);
+            self.departed.insert(id, DepartedRenderer { info });
+        }
     }
 
+    /// Connected, or disconnected since this process started.
     pub async fn get_info(&self, id: &str) -> Result<RendererInfo> {
-        self.sessions
+        if let Some(entry) = self.sessions.get(id) {
+            return Ok(self.session_to_info(&entry));
+        }
+        self.departed
             .get(id)
-            .map(|entry| session_to_info(&entry))
+            .map(|entry| entry.info.clone())
             .ok_or_else(|| AppError::NotFound(format!("renderer '{id}'")))
     }
 
+    /// Connected renderers plus ones that disconnected since this process
+    /// started — check [`RendererInfo::is_connected`] to tell them apart.
     pub async fn list_info(&self) -> Vec<RendererInfo> {
-        self.sessions
+        let connected = self
+            .sessions
             .iter()
-            .map(|entry| session_to_info(entry.value()))
-            .collect()
+            .map(|entry| self.session_to_info(entry.value()));
+        let departed = self
+            .departed
+            .iter()
+            .filter(|entry| !self.sessions.contains_key(entry.key()))
+            .map(|entry| entry.info.clone());
+        connected.chain(departed).collect()
+    }
+
+    /// Whether any connected renderer has an instance of `graphic_id` —
+    /// a deleted graphic's files stay until this is false.
+    pub fn graphic_in_use(&self, graphic_id: &str) -> bool {
+        self.sessions.iter().any(|session| {
+            session
+                .instances
+                .values()
+                .any(|instance| instance.graphic_id == graphic_id)
+        })
     }
 
     /// Sends a command to a renderer and waits for its correlated result.
@@ -154,6 +198,7 @@ impl RendererRegistry {
             Err(_) => {
                 if let Some(mut session) = self.sessions.get_mut(renderer_id) {
                     session.pending.remove(&request_id);
+                    session.timed_out = true;
                 }
                 Err(AppError::Timeout(renderer_id.to_string()))
             }
@@ -171,6 +216,7 @@ impl RendererRegistry {
     ) {
         if let Some(mut session) = self.sessions.get_mut(renderer_id) {
             session.messages_received.fetch_add(1, Ordering::Relaxed);
+            session.timed_out = false;
             apply_result(&mut session, &message);
 
             if let Some(tx) = session.pending.remove(&request_id) {
@@ -237,7 +283,37 @@ fn apply_result(session: &mut RendererSession, message: &RendererMessage) {
     }
 }
 
-fn session_to_info(s: &RendererSession) -> RendererInfo {
+impl RendererRegistry {
+    fn session_to_info(&self, s: &RendererSession) -> RendererInfo {
+        session_to_info(s, self.status_of(s))
+    }
+
+    /// `WARNING` once requests pile up (half of `max_pending`) or the last
+    /// one timed out — the early sign of a renderer that stopped answering
+    /// while its WebSocket stays open.
+    fn status_of(&self, s: &RendererSession) -> RendererStatus {
+        let pending = s.pending.len();
+        if pending > 0 && pending >= (self.max_pending / 2).max(1) {
+            RendererStatus::warning(format!("{pending} pending requests"))
+        } else if s.timed_out {
+            RendererStatus::warning("last request timed out")
+        } else {
+            RendererStatus::ok()
+        }
+    }
+}
+
+fn departed_info(s: &RendererSession) -> RendererInfo {
+    let now = Utc::now();
+    let mut info = session_to_info(s, RendererStatus::error(format!("disconnected since {}", now.to_rfc3339())));
+    info.connected_at = None;
+    info.disconnected_at = Some(now);
+    info.instances = Vec::new();
+    info.metrics = None;
+    info
+}
+
+fn session_to_info(s: &RendererSession, status: RendererStatus) -> RendererInfo {
     // `instances` is a HashMap (keyed by id for O(1) lookup on actions),
     // which has no defined iteration order — sorting by `loaded_at` here
     // reconstructs actual load order, which is also visual stacking order
@@ -262,9 +338,14 @@ fn session_to_info(s: &RendererSession) -> RendererInfo {
     RendererInfo {
         id: s.id.clone(),
         name: s.name.clone(),
-        connected_at: s.connected_at,
-        render_target: s.render_target.clone(),
+        description: s.description.clone(),
+        status,
+        connected_at: Some(s.connected_at),
+        disconnected_at: None,
+        render_target: Some(s.render_target.clone()),
         render_target_schema: s.render_target_schema.clone(),
+        custom_actions: s.custom_actions.clone(),
+        render_characteristics: s.render_characteristics.clone(),
         instances,
         metrics: Some(metrics),
     }

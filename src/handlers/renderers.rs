@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use crate::{
     error::{AppError, Result},
     handlers::{api_key_from, authorize_target},
+    directory::KnownRenderer,
     models::{is_valid_renderer_name, Graphic, RenderTarget, RendererId, RendererInfo},
     renderer_ws,
     store::graphics::GraphicStore,
@@ -23,13 +24,47 @@ pub async fn list_renderers(
     headers: HeaderMap,
 ) -> Result<Json<Value>> {
     let api_key = api_key_from(&headers);
-    let all = state.renderers.list_info().await;
+    let all = all_renderers(&state).await;
     let visible = state.access.filter_visible(&api_key, all).await;
-    let list: Vec<Value> = visible
-        .iter()
-        .map(|r| json!({ "id": r.id, "name": r.name, "renderTarget": r.render_target }))
-        .collect();
+    let list: Vec<Value> = visible.iter().map(list_item).collect();
     Ok(Json(json!({ "renderers": list })))
+}
+
+/// The registry's renderers, plus directory ones it doesn't have — a live
+/// or recently disconnected session always wins over the directory's entry,
+/// except for a `description` the renderer didn't declare itself.
+async fn all_renderers(state: &AppState) -> Vec<RendererInfo> {
+    let mut renderers = state.renderers.list_info().await;
+    for known in state.directory.known_renderers().await {
+        match renderers.iter_mut().find(|r| r.id == known.id) {
+            Some(renderer) => fill_description(renderer, &known),
+            None => renderers.push(RendererInfo::known(&known)),
+        }
+    }
+    renderers.sort_by(|a, b| a.id.cmp(&b.id));
+    renderers
+}
+
+fn fill_description(renderer: &mut RendererInfo, known: &KnownRenderer) {
+    if renderer.description.is_none() {
+        renderer.description = known.description.clone();
+    }
+}
+
+/// The spec's list item (`id`, `name`, `description`), plus `status` and
+/// `renderTarget` as extensions — enough for a controller to see what's up
+/// without a request per renderer.
+fn list_item(r: &RendererInfo) -> Value {
+    let mut item = json!({
+        "id": r.id,
+        "name": r.name,
+        "status": r.status,
+        "renderTarget": r.render_target,
+    });
+    if let Some(description) = &r.description {
+        item["description"] = json!(description);
+    }
+    item
 }
 
 pub async fn get_renderer(
@@ -38,23 +73,36 @@ pub async fn get_renderer(
     headers: HeaderMap,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
+    let mut info = authorize_target(&state, &headers, &id).await?;
+    if let Some(known) = state.directory.known_renderers().await.iter().find(|k| k.id == id) {
+        fill_description(&mut info, known);
+    }
     let graphics = load_graphics_by_id(&state).await?;
 
     let render_target_schema = info
         .render_target_schema
         .clone()
         .unwrap_or_else(generic_render_target_schema);
+    let render_targets: Vec<Value> = target_info(&info, &graphics).into_iter().collect();
 
-    Ok(Json(json!({
-        "renderer": {
-            "id": info.id,
-            "name": info.name,
-            "status": { "status": "OK" },
-            "renderTargetSchema": render_target_schema,
-            "renderTargets": [target_info(&info, &graphics)],
+    let mut renderer = json!({
+        "id": info.id,
+        "name": info.name,
+        "status": info.status,
+        "renderTargetSchema": render_target_schema,
+        "renderTargets": render_targets,
+    });
+    let optional = [
+        ("description", info.description.clone().map(Value::String)),
+        ("customActions", info.custom_actions.clone()),
+        ("renderCharacteristics", info.render_characteristics.clone()),
+    ];
+    for (key, value) in optional {
+        if let Some(value) = value {
+            renderer[key] = value;
         }
-    })))
+    }
+    Ok(Json(json!({ "renderer": renderer })))
 }
 
 #[derive(Deserialize)]
@@ -75,7 +123,7 @@ pub async fn get_target(
     let requested: RenderTarget = serde_json::from_str(&query.render_target)
         .map_err(|e| AppError::BadRequest(format!("invalid renderTarget: {e}")))?;
 
-    if requested != info.render_target {
+    if info.render_target.as_ref() != Some(&requested) {
         return Err(AppError::NotFound(format!(
             "renderTarget {requested:?} on renderer '{renderer_id}' (bound to {:?})",
             info.render_target
@@ -83,7 +131,9 @@ pub async fn get_target(
     }
 
     let graphics = load_graphics_by_id(&state).await?;
-    Ok(Json(target_info(&info, &graphics)))
+    target_info(&info, &graphics)
+        .map(Json)
+        .ok_or_else(|| AppError::NotFound(format!("renderer '{renderer_id}' has no RenderTarget")))
 }
 
 /// `zone`/`token` (or whatever else an `AccessControl` impl wants) travel in
@@ -129,8 +179,13 @@ fn generic_render_target_schema() -> Value {
     json!({ "type": "object" })
 }
 
-pub(crate) fn target_info(info: &RendererInfo, graphics: &HashMap<String, Graphic>) -> Value {
-    json!({
+/// The spec's RenderTargetInfo for the renderer's single RenderTarget —
+/// `None` while it's not connected ("list of *active* RenderTargets").
+pub(crate) fn target_info(info: &RendererInfo, graphics: &HashMap<String, Graphic>) -> Option<Value> {
+    if !info.is_connected() {
+        return None;
+    }
+    Some(json!({
         "renderTarget": info.render_target,
         "name": info.name,
         "graphicInstances": info.instances.iter().map(|inst| json!({
@@ -146,5 +201,5 @@ pub(crate) fn target_info(info: &RendererInfo, graphics: &HashMap<String, Graphi
             "state": inst.state,
             "currentStep": inst.current_step,
         })).collect::<Vec<_>>(),
-    })
+    }))
 }

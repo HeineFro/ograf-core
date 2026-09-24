@@ -51,6 +51,9 @@ struct Hello {
     name: String,
     render_target: RenderTarget,
     render_target_schema: Option<Value>,
+    description: Option<String>,
+    custom_actions: Option<Value>,
+    render_characteristics: Option<Value>,
     instances: Option<Vec<InstanceSnapshot>>,
 }
 
@@ -69,7 +72,7 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
             "renderer hello with invalid name rejected: '{}'",
             sanitize_for_logs(&hello.name)
         );
-        let close_msg = format!("invalid renderer name: must be 1-64 characters, A-Z a-z 0-9 - _ .");
+        let close_msg = "invalid renderer id: must be 1-64 of A-Z a-z 0-9 - _ ., and not '.' or '..'";
         let _ = socket
             .send(Message::Close(Some(axum::extract::ws::CloseFrame {
                 code: 1008, // Policy violation
@@ -117,11 +120,15 @@ pub async fn handle_session(mut socket: WebSocket, state: AppState, query: Strin
         connected_at: Utc::now(),
         render_target: hello.render_target,
         render_target_schema: hello.render_target_schema,
+        description: hello.description,
+        custom_actions: hello.custom_actions,
+        render_characteristics: hello.render_characteristics,
         sender: tx,
         instances,
         pending: HashMap::new(),
         messages_sent: std::sync::atomic::AtomicU64::new(0),
         messages_received: std::sync::atomic::AtomicU64::new(0),
+        timed_out: false,
         connection_id,
     };
 
@@ -176,12 +183,16 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                     render_target,
                     instance_count
                 );
-                let render_target_schema = capabilities.get("renderTargetSchema").cloned();
+                let capability = |key: &str| capabilities.get(key).filter(|v| !v.is_null()).cloned();
                 Some(Hello {
                     id: renderer_id.clone(), // the id doubles as the spec's `name`
                     name: renderer_id,
                     render_target,
-                    render_target_schema,
+                    render_target_schema: capability("renderTargetSchema"),
+                    description: capability("description")
+                        .and_then(|v| v.as_str().map(str::to_owned)),
+                    custom_actions: capability("customActions"),
+                    render_characteristics: capability("renderCharacteristics"),
                     instances,
                 })
             }

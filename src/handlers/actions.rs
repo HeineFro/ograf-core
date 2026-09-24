@@ -9,23 +9,30 @@ use uuid::Uuid;
 
 use crate::{
     error::{AppError, Result},
-    handlers::{api_key_from, authorize_target, renderers::parse_renderer_id},
-    models::{GraphicInstance, InstanceId, RenderTarget, RendererMessage, ServerMessage},
+    handlers::{api_key_from, authorize_target, ensure_connected, renderers::parse_renderer_id},
+    models::{GraphicInstance, InstanceId, RenderTarget, RendererInfo, RendererMessage, ServerMessage},
     store::graphics::GraphicStore,
     AppState,
 };
 
-fn ensure_target_matches(
+/// Every `target/graphicInstance/*` call: the caller may target the renderer
+/// (403/404), it's connected (503), and `requested` is its RenderTarget (404).
+async fn connected_target(
+    state: &AppState,
+    headers: &HeaderMap,
     renderer_id: &str,
-    expected: &RenderTarget,
     requested: &RenderTarget,
-) -> Result<()> {
-    if expected != requested {
+) -> Result<RendererInfo> {
+    let id = parse_renderer_id(renderer_id)?;
+    let info = authorize_target(state, headers, &id).await?;
+    ensure_connected(&info)?;
+    if info.render_target.as_ref() != Some(requested) {
         return Err(AppError::NotFound(format!(
-            "renderTarget {requested:?} not found on renderer '{renderer_id}' (bound to {expected:?})"
+            "renderTarget {requested:?} not found on renderer '{renderer_id}' (bound to {:?})",
+            info.render_target
         )));
     }
-    Ok(())
+    Ok(info)
 }
 
 /// The spec types `graphicInstanceId` as a plain string — one that isn't
@@ -87,9 +94,8 @@ pub async fn load(
     headers: HeaderMap,
     Json(body): Json<LoadRequest>,
 ) -> Result<Json<Value>> {
-    let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
-    ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
+    let info = connected_target(&state, &headers, &renderer_id, &body.render_target).await?;
+    let id = info.id.clone();
 
     // 404s if the graphic doesn't exist, per spec.
     GraphicStore::new(&state.config.graphics_storage)
@@ -163,9 +169,8 @@ pub async fn play_action(
     headers: HeaderMap,
     Json(body): Json<PlayActionRequest>,
 ) -> Result<Json<Value>> {
-    let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
-    ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
+    let info = connected_target(&state, &headers, &renderer_id, &body.render_target).await?;
+    let id = info.id.clone();
     let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let goto = body.params.goto;
     let delta = body.params.delta;
@@ -221,9 +226,8 @@ pub async fn stop_action(
     headers: HeaderMap,
     Json(body): Json<StopActionRequest>,
 ) -> Result<Json<Value>> {
-    let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
-    ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
+    let info = connected_target(&state, &headers, &renderer_id, &body.render_target).await?;
+    let id = info.id.clone();
     let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let skip_animation = body.params.skip_animation;
 
@@ -275,9 +279,8 @@ pub async fn update_action(
     headers: HeaderMap,
     Json(body): Json<UpdateActionRequest>,
 ) -> Result<Json<Value>> {
-    let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
-    ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
+    let info = connected_target(&state, &headers, &renderer_id, &body.render_target).await?;
+    let id = info.id.clone();
     let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let data = body.params.data;
     let skip_animation = body.params.skip_animation;
@@ -331,9 +334,8 @@ pub async fn custom_action(
     headers: HeaderMap,
     Json(body): Json<CustomActionRequest>,
 ) -> Result<Json<Value>> {
-    let id = parse_renderer_id(&renderer_id)?;
-    let info = authorize_target(&state, &headers, &id).await?;
-    ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
+    let info = connected_target(&state, &headers, &renderer_id, &body.render_target).await?;
+    let id = info.id.clone();
     let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let payload = body.params.payload;
     let skip_animation = body.params.skip_animation;
@@ -380,8 +382,10 @@ pub async fn renderer_custom_action(
     Json(body): Json<RendererCustomActionRequest>,
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
-    // Ensures a clear 404/403 if the renderer id is unknown or off-limits.
-    authorize_target(&state, &headers, &id).await?;
+    // Ensures a clear 404/403 if the renderer id is unknown or off-limits,
+    // and 503 if it's known but offline.
+    let info = authorize_target(&state, &headers, &id).await?;
+    ensure_connected(&info)?;
 
     let payload = body.payload;
     let skip_animation = body.skip_animation;
@@ -457,7 +461,8 @@ pub async fn clear(
 ) -> Result<Json<Value>> {
     let id = parse_renderer_id(&renderer_id)?;
     let info = authorize_target(&state, &headers, &id).await?;
-    let target = info.render_target;
+    ensure_connected(&info)?;
+    let target = info.render_target.clone().unwrap_or_default();
 
     let to_clear: Vec<InstanceId> = info
         .instances

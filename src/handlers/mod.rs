@@ -73,7 +73,7 @@ pub(crate) async fn authorize_target(
     headers: &HeaderMap,
     renderer_id: &RendererId,
 ) -> Result<RendererInfo> {
-    let info = state.renderers.get_info(renderer_id).await?;
+    let info = find_renderer(state, renderer_id).await?;
     let api_key = api_key_from(headers);
     if state.access.can_target(&api_key, &info.name).await {
         Ok(info)
@@ -82,5 +82,31 @@ pub(crate) async fn authorize_target(
             "no access to renderer '{}'",
             info.name
         )))
+    }
+}
+
+/// Connected or recently disconnected (the registry), else only known
+/// through the consumer's [`RendererDirectory`](crate::directory::RendererDirectory).
+pub(crate) async fn find_renderer(state: &AppState, renderer_id: &str) -> Result<RendererInfo> {
+    if let Ok(info) = state.renderers.get_info(renderer_id).await {
+        return Ok(info);
+    }
+    state
+        .directory
+        .known_renderers()
+        .await
+        .iter()
+        .find(|known| known.id == renderer_id)
+        .map(RendererInfo::known)
+        .ok_or_else(|| AppError::NotFound(format!("renderer '{renderer_id}'")))
+}
+
+/// Actions need a live session — a known but offline renderer is the spec's
+/// "error comes from the Renderer", made specific as 503.
+pub(crate) fn ensure_connected(info: &RendererInfo) -> Result<()> {
+    if info.is_connected() {
+        Ok(())
+    } else {
+        Err(AppError::RendererNotConnected(info.id.clone()))
     }
 }
