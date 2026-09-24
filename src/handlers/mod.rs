@@ -11,12 +11,34 @@ use crate::{
     AppState,
 };
 
+/// The spec's server info, taken from Core's own `Cargo.toml` so there's one
+/// place to maintain it and `version` always follows the crate.
 pub async fn server_info() -> Json<Value> {
     Json(json!({
-        "name": "OGraf Server",
-        "description": "OGraf-compatible graphics server",
+        "name": env!("CARGO_PKG_NAME"),
+        "description": env!("CARGO_PKG_DESCRIPTION"),
+        "author": author(env!("CARGO_PKG_AUTHORS"), env!("CARGO_PKG_REPOSITORY")),
         "version": env!("CARGO_PKG_VERSION"),
     }))
+}
+
+/// The spec's `Author` (`name` required, `email`/`url` optional) from Cargo's
+/// `authors` — `"Name <email>"` entries joined by `:` — using the first one.
+fn author(cargo_authors: &str, repository: &str) -> Value {
+    let first = cargo_authors.split(':').next().unwrap_or_default().trim();
+    let (name, email) = match first.split_once('<') {
+        Some((name, rest)) => (name.trim(), rest.trim_end_matches('>').trim()),
+        None => (first, ""),
+    };
+
+    let mut author = json!({ "name": name });
+    if !email.is_empty() {
+        author["email"] = json!(email);
+    }
+    if !repository.is_empty() {
+        author["url"] = json!(repository);
+    }
+    author
 }
 
 /// Health check endpoint for liveness/readiness probes — always returns 200
