@@ -7,7 +7,7 @@ This document verifies that `ograf-core` implements the OGraf v1 Server API spec
 All endpoints are mounted under `/ograf/v1` (configurable by consumer).
 
 ### Server Info
-- `GET /` - Returns server name, description, and version
+- `GET /` - Returns server name, description, author and version (from Core's `Cargo.toml`); answers at both `/ograf/v1/` and `/ograf/v1`
 
 ### Graphics Management
 - `GET /graphics` - List all available graphics
@@ -16,7 +16,7 @@ All endpoints are mounted under `/ograf/v1` (configurable by consumer).
 - `GET /graphics/:id/assets/*path` - Serve graphic asset files
 
 ### Renderer Management
-- `GET /renderers/connect` - WebSocket upgrade endpoint for renderer connection
+- `GET /rendererApi/v1/connect` - WebSocket upgrade endpoint for renderer connection (outside `/ograf/v1`: the renderer protocol isn't part of the Server API)
 - `GET /renderers` - List all connected renderers (filtered by AccessControl)
 - `GET /renderers/:id` - Get specific renderer details
 - `GET /renderers/:id/target?renderTarget=<json>` - Get render target details
@@ -40,7 +40,7 @@ All endpoints are mounted under `/ograf/v1` (configurable by consumer).
 ### Client → Server Messages
 
 #### Connection Lifecycle
-- `hello` - Initial handshake with renderer name, renderTarget, and capabilities
+- `hello` - Initial handshake with `rendererId`, renderTarget, and capabilities (`name` accepted as an alias)
 - `ping` - Keepalive ping (30s timeout)
 
 #### Action Results

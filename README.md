@@ -78,16 +78,16 @@ consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 
 ## API surface
 
-- `GET /ograf/v1/` — server info
+- `GET /ograf/v1/` — server info (name, description, author, version from Core's `Cargo.toml`)
 - `GET /ograf/v1/health` — health check (always returns 200 OK, no auth required)
 - `GET /ograf/v1/graphics`, `GET /ograf/v1/graphics/:id` — list/inspect graphics
 - `GET /ograf/v1/graphics/:id/assets/*path`, `GET /ograf/v1/graphics/:id/thumbnail` — serve graphic assets
-- `GET /ograf/v1/renderers/connect` — renderer WebSocket upgrade
 - `GET /ograf/v1/renderers`, `GET /ograf/v1/renderers/:id`, `GET /ograf/v1/renderers/:id/target` — list/inspect renderers
 - `PUT /ograf/v1/renderers/:id/target/graphicInstance/{load,clear}`
 - `POST /ograf/v1/renderers/:id/target/graphicInstance/{playAction,stopAction,updateAction}`
 - `POST /ograf/v1/renderers/:id/target/graphicInstance/customActions/:actionId`
 - `POST /ograf/v1/renderers/:id/customActions/:actionId` — renderer-scoped custom action
+- `GET /rendererApi/v1/connect` — renderer WebSocket upgrade (`RENDERER_CONNECT_PATH`; outside `/ograf/v1`, since the renderer protocol isn't part of the Server API)
 
 ## OGraf v1 Spec Compliance
 

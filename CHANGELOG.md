@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-24
+
+### Breaking Changes
+
+- **Renderer WebSocket moved to `GET /rendererApi/v1/connect`** (was
+  `GET /ograf/v1/renderers/connect`). Under `/ograf/v1/renderers/` it
+  shadowed the spec's `GET /renderers/{rendererId}`, so a renderer with the id
+  `connect` could never be looked up. The renderer protocol isn't part of the
+  OGraf Server API and now lives outside its namespace. Exported as
+  `ograf_core::RENDERER_CONNECT_PATH`.
+
+  **Migration:** point renderers at `/rendererApi/v1/connect` (same query
+  string as before).
+
+- **`.` and `..` are no longer valid renderer ids.** They're dot-segments that
+  clients and proxies normalize away, so `/renderers/{rendererId}` could never
+  reach them. `is_valid_renderer_name` refuses them.
+
+- **`RendererMessage::Hello` field `name` renamed to `renderer_id`.** On the
+  wire it's `rendererId`, matching `welcome`. `name` is still accepted as an
+  alias, so existing renderers keep working. Only Rust code matching on
+  `Hello { name, .. }` needs updating.
+
+### Added
+
+- Server info (`GET /ograf/v1/`) now includes the spec's `author` and takes
+  `name`, `description`, `author` (name, email, repository url) and `version`
+  from Core's `Cargo.toml`.
+
+### Fixed
+
+- `GET /ograf/v1/` (with trailing slash, the spec's path) answered 404. Only
+  `/ograf/v1` worked. Both answer now.
+
 ## [0.4.0] - 2026-09-23
 
 ### Breaking Changes
