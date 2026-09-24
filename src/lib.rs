@@ -91,6 +91,9 @@ pub fn build_router(state: AppState) -> Router {
 
     Router::new()
         .nest("/ograf/v1", api)
+        // The spec's server info is `/` under `/ograf/v1`, i.e. `/ograf/v1/`
+        // — `nest` only matches its `/` route without the trailing slash.
+        .route("/ograf/v1/", get(handlers::server_info))
         .route(
             "/serverApi/internal/graphics/:graphic_id/*path",
             get(handlers::graphics::serve_graphic_asset),
