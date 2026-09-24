@@ -68,6 +68,15 @@ pub trait AccessControl: Send + Sync {
     ) -> bool {
         true
     }
+
+    /// Whether `api_key` may delete `graphic_id` — `DELETE /graphics/{id}`.
+    /// Defaults to allowing it, like every other call without access control:
+    /// a deployment that runs Core on its own already lets anyone on its
+    /// network clear what's on air. A delete without `force` only unlists the
+    /// graphic, so it's recoverable until the retention period ends.
+    async fn can_delete_graphic(&self, _api_key: &str, _graphic_id: &str) -> bool {
+        true
+    }
 }
 
 /// No restriction at all — every renderer visible, every key can target

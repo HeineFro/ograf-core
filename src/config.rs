@@ -11,6 +11,9 @@ pub struct Config {
     pub action_timeout_ms: u64,
     pub graphics_cache_ttl_secs: u64,
     pub renderer_max_pending: usize,
+    /// How long a graphic deleted without `force` keeps its files (so
+    /// on-air instances keep working) before Core removes them for good.
+    pub deleted_graphic_retention_secs: u64,
 }
 
 impl Config {
@@ -35,6 +38,10 @@ impl Config {
                 .unwrap_or_else(|_| "100".into())
                 .parse()
                 .expect("OGRAF_RENDERER_MAX_PENDING must be a valid number"),
+            deleted_graphic_retention_secs: env::var("OGRAF_DELETED_GRAPHIC_RETENTION_SECS")
+                .unwrap_or_else(|_| "86400".into())
+                .parse()
+                .expect("OGRAF_DELETED_GRAPHIC_RETENTION_SECS must be a valid number"),
         }
     }
 
@@ -48,5 +55,9 @@ impl Config {
     /// Set to 0 to disable caching (always fetch fresh from disk).
     pub fn graphics_cache_ttl(&self) -> Duration {
         Duration::from_secs(self.graphics_cache_ttl_secs)
+    }
+
+    pub fn deleted_graphic_retention(&self) -> Duration {
+        Duration::from_secs(self.deleted_graphic_retention_secs)
     }
 }

@@ -7,6 +7,10 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
+use std::sync::atomic::{AtomicI64, Ordering};
+
+use chrono::Utc;
+
 use crate::{
     error::{AppError, Result},
     handlers::api_key_from,
@@ -24,6 +28,7 @@ pub async fn list_graphics(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>> {
+    purge_deleted_graphics_throttled(&state).await;
     let api_key = api_key_from(&headers);
     let all_graphics = GraphicStore::new(&state.config.graphics_storage)
         .list()
@@ -31,6 +36,57 @@ pub async fn list_graphics(
     let visible = state.access.filter_graphics(&api_key, all_graphics).await;
     let list: Vec<Value> = visible.iter().map(Graphic::list_info).collect();
     Ok(Json(json!({ "graphics": list })))
+}
+
+#[derive(Deserialize)]
+pub struct DeleteQuery {
+    #[serde(default)]
+    pub force: bool,
+}
+
+/// The spec's `DELETE /graphics/{graphicId}?force=` — see
+/// [`GraphicStore::delete`] for what `force` changes.
+pub async fn delete_graphic(
+    State(state): State<AppState>,
+    Path(graphic_id): Path<String>,
+    Query(query): Query<DeleteQuery>,
+    headers: HeaderMap,
+) -> Result<Json<Value>> {
+    let api_key = api_key_from(&headers);
+    if !state.access.can_delete_graphic(&api_key, &graphic_id).await {
+        return Err(AppError::Forbidden(format!(
+            "not authorized to delete graphic '{graphic_id}'"
+        )));
+    }
+    GraphicStore::new(&state.config.graphics_storage)
+        .delete(&graphic_id, query.force)
+        .await?;
+    purge_deleted_graphics(&state).await;
+    Ok(Json(json!({})))
+}
+
+/// Removes graphics whose retention has passed — run from `DELETE` and, at
+/// most once a minute, from `GET /graphics`, so Core needs no background task.
+async fn purge_deleted_graphics(state: &AppState) {
+    let renderers = state.renderers.clone();
+    GraphicStore::new(&state.config.graphics_storage)
+        .purge_deleted(state.config.deleted_graphic_retention(), |id| {
+            renderers.graphic_in_use(id)
+        })
+        .await;
+}
+
+async fn purge_deleted_graphics_throttled(state: &AppState) {
+    static LAST_PURGE: AtomicI64 = AtomicI64::new(0);
+    let now = Utc::now().timestamp();
+    let last = LAST_PURGE.load(Ordering::Relaxed);
+    if now - last >= 60
+        && LAST_PURGE
+            .compare_exchange(last, now, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+    {
+        purge_deleted_graphics(state).await;
+    }
 }
 
 pub async fn get_graphic(
@@ -93,7 +149,7 @@ pub async fn serve_graphic_asset(
     Path((graphic_id, asset_path)): Path<(String, String)>,
 ) -> Response {
     let storage_path = match GraphicStore::new(&state.config.graphics_storage)
-        .get(&graphic_id)
+        .get_for_assets(&graphic_id)
         .await
     {
         Ok(graphic) => graphic.storage_path,

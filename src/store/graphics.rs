@@ -24,13 +24,21 @@ struct GraphicsCache {
 }
 
 /// Reads graphics straight from disk — Core owns no database. Whatever sits
-/// in front of Core (admin routes, or a human with `scp`) writes (and deletes)
-/// `{graphics_storage}/{graphic_id}/...` directly; Core only ever reads.
+/// in front of Core (admin routes, or a human with `scp`) writes
+/// `{graphics_storage}/{graphic_id}/...` directly. Core's only write is the
+/// spec's `DELETE /graphics/{id}`: without `force` it leaves a
+/// [`DELETED_MARKER`] in the graphic's directory, which unlists it while its
+/// assets keep being served to on-air instances, until
+/// [`GraphicStore::purge_deleted`] removes it.
 /// Caches the list() result for a configurable TTL to avoid repeated disk
 /// scans when serving multiple concurrent requests.
 pub struct GraphicStore {
     root: PathBuf,
 }
+
+/// File in a graphic's directory marking it deleted (without `force`); holds
+/// the RFC 3339 time of the delete.
+pub const DELETED_MARKER: &str = ".ograf-deleted";
 
 /// A `graphic_id` reaches here straight from a URL path segment — it's only
 /// ever safe to use as a filesystem directory name (never joined containing
@@ -148,6 +156,75 @@ impl GraphicStore {
         Ok(graphics)
     }
 
+    /// Like `get()`, but also finds a graphic deleted without `force` — its
+    /// assets must keep reaching instances that are still on air.
+    pub(crate) async fn get_for_assets(&self, id: &str) -> Result<Graphic> {
+        if !is_valid_graphic_id(id) {
+            return Err(AppError::NotFound(format!("graphic '{id}'")));
+        }
+        load_any(&self.root, id)
+            .await
+            .ok_or_else(|| AppError::NotFound(format!("graphic '{id}'")))
+    }
+
+    /// The spec's `DELETE /graphics/{id}`. Without `force`, only unlists the
+    /// graphic (see [`DELETED_MARKER`]); with it, removes its directory now —
+    /// also for one that was already unlisted.
+    pub async fn delete(&self, id: &str, force: bool) -> Result<()> {
+        let not_found = || AppError::NotFound(format!("graphic '{id}'"));
+        if !is_valid_graphic_id(id) || load_any(&self.root, id).await.is_none() {
+            return Err(not_found());
+        }
+        let dir = self.root.join(id);
+        let already_deleted = is_marked_deleted(&dir).await;
+
+        if force {
+            tokio::fs::remove_dir_all(&dir).await.map_err(|e| {
+                AppError::Internal(anyhow::anyhow!("failed to remove graphic '{id}': {e}"))
+            })?;
+        } else if already_deleted {
+            return Err(not_found());
+        } else {
+            tokio::fs::write(dir.join(DELETED_MARKER), Utc::now().to_rfc3339())
+                .await
+                .map_err(|e| {
+                    AppError::Internal(anyhow::anyhow!("failed to mark graphic '{id}' deleted: {e}"))
+                })?;
+        }
+        invalidate_cache().await;
+        Ok(())
+    }
+
+    /// Removes graphics deleted (without `force`) longer than `retention`
+    /// ago, unless `in_use` says an instance of it is still loaded. Returns
+    /// how many were removed. Failures are logged, not returned — this runs
+    /// opportunistically, not on anyone's behalf.
+    pub async fn purge_deleted(&self, retention: Duration, in_use: impl Fn(&str) -> bool) -> usize {
+        let Ok(mut entries) = tokio::fs::read_dir(&self.root).await else {
+            return 0;
+        };
+        let mut removed = 0;
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let dir = entry.path();
+            let Some(deleted_at) = deleted_at(&dir).await else {
+                continue;
+            };
+            let age = Utc::now().signed_duration_since(deleted_at);
+            if age.to_std().map_or(true, |age| age < retention) || in_use(&id) {
+                continue;
+            }
+            match tokio::fs::remove_dir_all(&dir).await {
+                Ok(()) => removed += 1,
+                Err(e) => tracing::warn!("failed to purge deleted graphic '{id}': {e}"),
+            }
+        }
+        if removed > 0 {
+            invalidate_cache().await;
+        }
+        removed
+    }
+
     /// Storage path for a graphic that may or may not exist — used by asset
     /// and thumbnail serving, which do their own 404 handling on read.
     pub fn path_for(&self, id: &str) -> PathBuf {
@@ -155,7 +232,40 @@ impl GraphicStore {
     }
 }
 
+/// A listed graphic — `None` for one deleted without `force`.
 async fn load_one(root: &Path, id: &str) -> Option<Graphic> {
+    if is_marked_deleted(&root.join(id)).await {
+        return None;
+    }
+    load_any(root, id).await
+}
+
+async fn is_marked_deleted(dir: &Path) -> bool {
+    tokio::fs::try_exists(dir.join(DELETED_MARKER))
+        .await
+        .unwrap_or(false)
+}
+
+/// When the graphic in `dir` was deleted without `force` — the marker's
+/// content, or its mtime if that doesn't parse. `None` if it isn't.
+async fn deleted_at(dir: &Path) -> Option<DateTime<Utc>> {
+    let marker = dir.join(DELETED_MARKER);
+    let content = tokio::fs::read_to_string(&marker).await.ok()?;
+    if let Ok(at) = DateTime::parse_from_rfc3339(content.trim()) {
+        return Some(at.with_timezone(&Utc));
+    }
+    let modified = tokio::fs::metadata(&marker).await.ok()?.modified().ok()?;
+    Some(DateTime::<Utc>::from(modified))
+}
+
+/// Next `list_cached` call re-scans the disk.
+async fn invalidate_cache() {
+    if let Some(cache) = GRAPHICS_CACHE.get() {
+        cache.write().await.fetched_at = Instant::now() - Duration::from_secs(3600);
+    }
+}
+
+async fn load_any(root: &Path, id: &str) -> Option<Graphic> {
     let dir = root.join(id);
     let manifest_path = find_manifest(&dir).await?;
 

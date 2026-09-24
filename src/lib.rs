@@ -66,7 +66,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/", get(handlers::server_info))
         .route("/health", get(handlers::health))
         .route("/graphics", get(handlers::graphics::list_graphics))
-        .route("/graphics/:id", get(handlers::graphics::get_graphic))
+        .route(
+            "/graphics/:id",
+            get(handlers::graphics::get_graphic).delete(handlers::graphics::delete_graphic),
+        )
         .route(
             "/graphics/:id/assets/*path",
             get(handlers::graphics::serve_graphic_asset),
