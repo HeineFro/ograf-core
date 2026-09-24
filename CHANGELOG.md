@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-24
+
+Spec-complete: every endpoint and schema of the OGraf Server API — see
+SPEC_COMPLIANCE.md, which now checks each one.
+
+### Breaking Changes
+
+- **`GET /renderers` lists renderers that aren't connected**, with the spec's
+  `status: ERROR`: ones that disconnected since the process started, and ones
+  a `RendererDirectory` knows. "Listed" no longer means "connected" — check
+  `status`. Actions against them answer `503`.
+- **`RendererInfo`**: `connected_at` and `render_target` are now `Option`
+  (`None` while not connected); new fields `status`, `description`,
+  `disconnected_at`, `custom_actions`, `render_characteristics`. Use
+  `RendererInfo::is_connected()`.
+- **`AppState` gets `directory`** — construct it with `AppState::new(config,
+  renderers, access)` (and optionally `.with_directory(...)`).
+- **`#[non_exhaustive]`** on `AppState`, `Config`, `Graphic`,
+  `GraphicInstance`, `RendererInfo`, `RendererMetrics`, `KnownRenderer`, so
+  adding fields later isn't a breaking change. Construct `AppState` with
+  `new`, `Config` with `from_env` (its fields stay public to adjust).
+- **Request `graphicInstanceId` is a string**, as in the spec: one that isn't
+  a UUID is a 404 (was a 422), and matches nothing in a `clear` filter.
+
+### Added
+
+- **`DELETE /graphics/{graphicId}?force=`**. Without `force`, the graphic is
+  unlisted (a `.ograf-deleted` marker in its directory) while its files keep
+  being served to on-air instances; they're removed after
+  `OGRAF_DELETED_GRAPHIC_RETENTION_SECS` (default 24 h) once no connected
+  renderer has an instance of it. `force=true` removes them at once. New
+  `AccessControl::can_delete_graphic` (default: allow, like every other call
+  without access control).
+- **Renderer `status`**: `OK` while connected; `WARNING` when pending
+  requests reach half of `OGRAF_RENDERER_MAX_PENDING` or the last request
+  timed out; `ERROR` while disconnected or not connected yet.
+- **`RendererDirectory`** trait (`known_renderers`) and `NoDirectory`. A
+  directory's `description` also fills in for a connected renderer that
+  didn't declare one in `hello`.
+- **`hello.capabilities`** may carry `description`, `customActions` and
+  `renderCharacteristics`, passed through to the spec's `RendererInfo`.
+- **Error bodies follow RFC 7807** (the spec's `ErrorResponse`): `title`,
+  `status`, `detail` — `error` is kept, with the same text as `detail`.
+
+### Fixed
+
+- Thumbnail 404s had an empty body; now an `ErrorResponse`.
+- The connect-refused and thumbnail 400 bodies now match every other error.
+
 ## [0.5.0] - 2026-09-24
 
 ### Breaking Changes
