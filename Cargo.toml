@@ -2,9 +2,9 @@
 name = "ograf-core"
 version = "0.5.0"
 edition = "2021"
-authors = ["Heine Froholdt <heine.froholdt@gmail.com>"]
+authors = ["Heine Froholdt <heine.froholdt@gprotonmail.com>"]
 license = "MIT OR Apache-2.0"
-description = "Pure Rust implementation of the OGraf v1 graphics-control API (HTTP + WebSocket) - 100% spec-compliant library"
+description = "Rust implementation of the OGraf v1 graphics-control API (HTTP + WebSocket) - 100% spec-compliant library"
 repository = "https://github.com/HeineFro/ograf-core"
 homepage = "https://github.com/HeineFro/ograf-core"
 documentation = "https://docs.rs/ograf-core"
