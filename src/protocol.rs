@@ -172,7 +172,11 @@ where
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum RendererMessage {
     Hello {
-        name: String,
+        /// The renderer's id — what controllers put in
+        /// `/renderers/{rendererId}`. `name` is still accepted (the field's
+        /// name before 0.5.0).
+        #[serde(rename = "rendererId", alias = "name")]
+        renderer_id: String,
         #[serde(rename = "renderTarget")]
         render_target: Value,
         #[serde(default)]

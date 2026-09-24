@@ -164,7 +164,7 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
     match tokio::time::timeout(Duration::from_secs(10), socket.recv()).await {
         Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<RendererMessage>(&text) {
             Ok(RendererMessage::Hello {
-                name,
+                renderer_id,
                 render_target,
                 capabilities,
                 instances,
@@ -172,14 +172,14 @@ async fn wait_for_hello(socket: &mut WebSocket) -> Option<Hello> {
                 let instance_count = instances.as_ref().map_or(0, |v| v.len());
                 tracing::info!(
                     "renderer hello: {} (renderTarget: {}, instances: {})",
-                    sanitize_for_logs(&name),
+                    sanitize_for_logs(&renderer_id),
                     render_target,
                     instance_count
                 );
                 let render_target_schema = capabilities.get("renderTargetSchema").cloned();
                 Some(Hello {
-                    id: name.clone(),  // 0.4.0: name is now the id
-                    name,
+                    id: renderer_id.clone(), // the id doubles as the spec's `name`
+                    name: renderer_id,
                     render_target,
                     render_target_schema,
                     instances,
