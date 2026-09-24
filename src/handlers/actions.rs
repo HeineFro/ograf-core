@@ -28,14 +28,14 @@ fn ensure_target_matches(
     Ok(())
 }
 
-fn ensure_instance_exists(instances: &[GraphicInstance], instance_id: InstanceId) -> Result<()> {
-    if instances.iter().any(|i| i.instance_id == instance_id) {
-        Ok(())
-    } else {
-        Err(AppError::NotFound(format!(
-            "graphicInstance '{instance_id}'"
-        )))
-    }
+/// The spec types `graphicInstanceId` as a plain string — one that isn't
+/// even a UUID can't name an instance Core created, so it's the spec's 404,
+/// not a request-body error.
+fn find_instance(instances: &[GraphicInstance], graphic_instance_id: &str) -> Result<InstanceId> {
+    Uuid::parse_str(graphic_instance_id)
+        .ok()
+        .filter(|id| instances.iter().any(|i| i.instance_id == *id))
+        .ok_or_else(|| AppError::NotFound(format!("graphicInstance '{graphic_instance_id}'")))
 }
 
 fn action_result(
@@ -153,7 +153,7 @@ pub struct PlayActionRequest {
     #[serde(rename = "renderTarget")]
     pub render_target: RenderTarget,
     #[serde(rename = "graphicInstanceId")]
-    pub graphic_instance_id: InstanceId,
+    pub graphic_instance_id: String,
     pub params: PlayActionParams,
 }
 
@@ -166,9 +166,7 @@ pub async fn play_action(
     let id = parse_renderer_id(&renderer_id)?;
     let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
-    ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
-
-    let instance_id = body.graphic_instance_id;
+    let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let goto = body.params.goto;
     let delta = body.params.delta;
     let skip_animation = body.params.skip_animation;
@@ -213,7 +211,7 @@ pub struct StopActionRequest {
     #[serde(rename = "renderTarget")]
     pub render_target: RenderTarget,
     #[serde(rename = "graphicInstanceId")]
-    pub graphic_instance_id: InstanceId,
+    pub graphic_instance_id: String,
     pub params: StopActionParams,
 }
 
@@ -226,9 +224,7 @@ pub async fn stop_action(
     let id = parse_renderer_id(&renderer_id)?;
     let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
-    ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
-
-    let instance_id = body.graphic_instance_id;
+    let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let skip_animation = body.params.skip_animation;
 
     let reply = state
@@ -269,7 +265,7 @@ pub struct UpdateActionRequest {
     #[serde(rename = "renderTarget")]
     pub render_target: RenderTarget,
     #[serde(rename = "graphicInstanceId")]
-    pub graphic_instance_id: InstanceId,
+    pub graphic_instance_id: String,
     pub params: UpdateActionParams,
 }
 
@@ -282,9 +278,7 @@ pub async fn update_action(
     let id = parse_renderer_id(&renderer_id)?;
     let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
-    ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
-
-    let instance_id = body.graphic_instance_id;
+    let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let data = body.params.data;
     let skip_animation = body.params.skip_animation;
 
@@ -327,7 +321,7 @@ pub struct CustomActionRequest {
     #[serde(rename = "renderTarget")]
     pub render_target: RenderTarget,
     #[serde(rename = "graphicInstanceId")]
-    pub graphic_instance_id: InstanceId,
+    pub graphic_instance_id: String,
     pub params: CustomActionParams,
 }
 
@@ -340,9 +334,7 @@ pub async fn custom_action(
     let id = parse_renderer_id(&renderer_id)?;
     let info = authorize_target(&state, &headers, &id).await?;
     ensure_target_matches(&renderer_id, &info.render_target, &body.render_target)?;
-    ensure_instance_exists(&info.instances, body.graphic_instance_id)?;
-
-    let instance_id = body.graphic_instance_id;
+    let instance_id = find_instance(&info.instances, &body.graphic_instance_id)?;
     let payload = body.params.payload;
     let skip_animation = body.params.skip_animation;
 
@@ -434,8 +426,9 @@ pub struct GraphicFilter {
     pub render_target: Option<RenderTarget>,
     #[serde(rename = "graphicId")]
     pub graphic_id: Option<String>,
+    /// A string, as in the spec — one that isn't a UUID just matches nothing.
     #[serde(rename = "graphicInstanceId")]
-    pub graphic_instance_id: Option<InstanceId>,
+    pub graphic_instance_id: Option<String>,
 }
 
 impl GraphicFilter {
@@ -445,9 +438,9 @@ impl GraphicFilter {
                 .graphic_id
                 .as_deref()
                 .map_or(true, |gid| gid == instance.graphic_id)
-            && self
-                .graphic_instance_id
-                .map_or(true, |iid| iid == instance.instance_id)
+            && self.graphic_instance_id.as_deref().map_or(true, |iid| {
+                Uuid::parse_str(iid).is_ok_and(|iid| iid == instance.instance_id)
+            })
     }
 }
 
