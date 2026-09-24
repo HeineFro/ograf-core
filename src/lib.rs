@@ -21,10 +21,21 @@ use config::Config;
 use store::renderers::RendererRegistry;
 
 #[derive(Clone)]
+#[non_exhaustive]
 pub struct AppState {
     pub config: Arc<Config>,
     pub renderers: Arc<RendererRegistry>,
     pub access: Arc<dyn AccessControl>,
+}
+
+impl AppState {
+    pub fn new(
+        config: Arc<Config>,
+        renderers: Arc<RendererRegistry>,
+        access: Arc<dyn AccessControl>,
+    ) -> Self {
+        Self { config, renderers, access }
+    }
 }
 
 pub use axum::Router;

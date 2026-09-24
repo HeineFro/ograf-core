@@ -2,6 +2,7 @@ use std::{env, time::Duration};
 
 /// No `renderer_token` here — access control is delegated to the
 /// `AccessControl` implementation, not handled by Core's env-derived config.
+#[non_exhaustive]
 pub struct Config {
     pub host: String,
     pub port: u16,

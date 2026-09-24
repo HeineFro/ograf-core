@@ -15,11 +15,11 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 fn app() -> Router {
-    build_router(AppState {
-        config: Arc::new(Config::from_env()),
-        renderers: Arc::new(RendererRegistry::new()),
-        access: Arc::new(AllowAllAccessControl),
-    })
+    build_router(AppState::new(
+        Arc::new(Config::from_env()),
+        Arc::new(RendererRegistry::new()),
+        Arc::new(AllowAllAccessControl),
+    ))
 }
 
 async fn get(path: &str) -> (StatusCode, Value) {

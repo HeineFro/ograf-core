@@ -43,6 +43,7 @@ pub use crate::protocol::{
 pub use crate::store::graphics::is_valid_graphic_id;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct Graphic {
     pub id: String,
     pub name: String,
@@ -76,6 +77,7 @@ impl Graphic {
 /// a separate metrics endpoint.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[non_exhaustive]
 pub struct RendererMetrics {
     pub pending_requests: usize,
     pub messages_sent: u64,
@@ -96,6 +98,7 @@ pub enum InstanceState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct GraphicInstance {
     pub instance_id: InstanceId,
     pub graphic_id: String,
@@ -110,6 +113,7 @@ pub struct GraphicInstance {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct RendererInfo {
     pub id: RendererId,
     pub name: String,
