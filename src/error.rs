@@ -57,8 +57,26 @@ impl IntoResponse for AppError {
             }
         };
 
-        (status, Json(json!({ "error": message }))).into_response()
+        problem(status, message).into_response()
     }
+}
+
+/// The spec's `ErrorResponse`: RFC 7807 problem details (`title`, `status`,
+/// `detail`), plus `error` — the only field before 0.6.0 — so existing
+/// clients keep working.
+fn problem(status: StatusCode, detail: String) -> (StatusCode, Json<serde_json::Value>) {
+    // 550 (a GraphicInstance's own method threw) has no standard reason.
+    let title = status.canonical_reason().unwrap_or(match status.as_u16() {
+        550 => "Graphic Action Failed",
+        _ => "Error",
+    });
+    let body = json!({
+        "title": title,
+        "status": status.as_u16(),
+        "detail": detail,
+        "error": detail,
+    });
+    (status, Json(body))
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;

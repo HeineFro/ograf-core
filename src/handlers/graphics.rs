@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 
 use crate::{
-    error::Result,
+    error::{AppError, Result},
     handlers::api_key_from,
     models::Graphic,
     store::graphics::{is_valid_graphic_id, safe_join, GraphicStore},
@@ -58,8 +58,9 @@ pub async fn get_thumbnail(
     Path(graphic_id): Path<String>,
     Query(query): Query<ThumbnailQuery>,
 ) -> Response {
+    let not_found = || AppError::NotFound(format!("thumbnail '{}' of graphic '{graphic_id}'", query.file)).into_response();
     if !is_valid_graphic_id(&graphic_id) {
-        return StatusCode::NOT_FOUND.into_response();
+        return not_found();
     }
 
     let mime = mime_guess::from_path(&query.file).first_or_octet_stream();
@@ -68,20 +69,12 @@ pub async fn get_thumbnail(
         "image/png" | "image/jpeg" | "image/gif" | "image/webp"
     );
     if !is_supported {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "unsupported thumbnail file type" })),
-        )
-            .into_response();
+        return AppError::BadRequest("unsupported thumbnail file type".into()).into_response();
     }
 
     let storage_path = GraphicStore::new(&state.config.graphics_storage).path_for(&graphic_id);
     let Some(file_path) = safe_join(&storage_path, &query.file) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({ "error": "invalid thumbnail file reference" })),
-        )
-            .into_response();
+        return AppError::BadRequest("invalid thumbnail file reference".into()).into_response();
     };
 
     match tokio::fs::read(&file_path).await {
@@ -91,7 +84,7 @@ pub async fn get_thumbnail(
             bytes,
         )
             .into_response(),
-        Err(_) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => not_found(),
     }
 }
 

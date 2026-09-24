@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use axum::{
     extract::{Path, Query, RawQuery, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     response::{IntoResponse, Response},
     Json,
 };
@@ -97,11 +97,7 @@ pub async fn connect_renderer(
     let query = query.unwrap_or_default();
 
     if !state.access.authorize_connect(&query).await {
-        return (
-            StatusCode::FORBIDDEN,
-            Json(json!({ "error": "not authorized to connect" })),
-        )
-            .into_response();
+        return AppError::Forbidden("not authorized to connect".into()).into_response();
     }
 
     ws.on_upgrade(move |socket| renderer_ws::handle_session(socket, state, query))
