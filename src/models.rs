@@ -9,7 +9,9 @@ pub type RendererId = String;
 /// Validates a renderer name for use as RendererId.
 ///
 /// Valid names: 1-64 characters, A-Z a-z 0-9 - _ .
-/// Case-sensitive, needs no URL escaping in path segments.
+/// Case-sensitive, needs no URL escaping in path segments. `.` and `..` are
+/// refused: they're dot-segments a client or proxy normalizes away, so
+/// `/renderers/{rendererId}` could never reach them.
 ///
 /// # Examples
 /// ```
@@ -19,11 +21,14 @@ pub type RendererId = String;
 /// assert!(is_valid_renderer_name("Renderer_1.backup"));
 /// assert!(!is_valid_renderer_name(""));  // too short
 /// assert!(!is_valid_renderer_name("renderer with spaces"));  // invalid chars
+/// assert!(!is_valid_renderer_name(".."));  // dot-segment
 /// ```
 pub fn is_valid_renderer_name(name: &str) -> bool {
     let len = name.len();
     len >= 1
         && len <= 64
+        && name != "."
+        && name != ".."
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
