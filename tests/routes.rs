@@ -9,7 +9,7 @@ use axum::{
 use http_body_util::BodyExt;
 use ograf_core::{
     access::AllowAllAccessControl, build_router, config::Config,
-    store::renderers::RendererRegistry, AppState, Router,
+    store::renderers::RendererRegistry, AppState, Router, RENDERER_CONNECT_PATH,
 };
 use serde_json::Value;
 use tower::ServiceExt;
@@ -33,6 +33,30 @@ async fn get(path: &str) -> (StatusCode, Value) {
         status,
         serde_json::from_slice(&bytes).unwrap_or(Value::Null),
     )
+}
+
+/// `connect` is an ordinary renderer id now: the lookup answers the spec's
+/// "No Renderer found", not the WebSocket upgrade handler.
+#[tokio::test]
+async fn renderers_connect_is_a_renderer_lookup() {
+    let (status, body) = get("/ograf/v1/renderers/connect").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("connect"),
+        "{body}"
+    );
+}
+
+/// A plain GET (no upgrade headers) reaching the WebSocket handler is
+/// refused by axum's `WebSocketUpgrade` extractor, never a 404.
+#[tokio::test]
+async fn websocket_route_lives_outside_the_server_api() {
+    let (status, _) = get(RENDERER_CONNECT_PATH).await;
+    assert_ne!(status, StatusCode::NOT_FOUND);
+    assert!(!RENDERER_CONNECT_PATH.starts_with("/ograf/v1"));
 }
 
 #[tokio::test]

@@ -29,6 +29,10 @@ pub struct AppState {
 
 pub use axum::Router;
 
+/// Where renderers open their WebSocket (`GET`, upgraded). Outside
+/// `/ograf/v1` on purpose, see `build_router`.
+pub const RENDERER_CONNECT_PATH: &str = "/rendererApi/v1/connect";
+
 /// Builds the `/ograf/v1/*` API router plus the internal graphic-asset route
 /// used by the renderer HTML — everything a consumer needs to nest under its
 /// own top-level router alongside its own admin routes. Static file serving
@@ -49,10 +53,6 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/graphics/:id/thumbnail",
             get(handlers::graphics::get_thumbnail),
-        )
-        .route(
-            "/renderers/connect",
-            get(handlers::renderers::connect_renderer),
         )
         .route("/renderers", get(handlers::renderers::list_renderers))
         .route("/renderers/:id", get(handlers::renderers::get_renderer))
@@ -94,6 +94,15 @@ pub fn build_router(state: AppState) -> Router {
         // The spec's server info is `/` under `/ograf/v1`, i.e. `/ograf/v1/`
         // — `nest` only matches its `/` route without the trailing slash.
         .route("/ograf/v1/", get(handlers::server_info))
+        // The renderer WebSocket protocol isn't part of the OGraf Server API,
+        // so it lives outside `/ograf/v1` — under `/ograf/v1/renderers/` it
+        // shadowed `GET /renderers/{rendererId}` for a renderer named
+        // `connect`. Versioned on its own, since the protocol changes
+        // independently of the Server API.
+        .route(
+            RENDERER_CONNECT_PATH,
+            get(handlers::renderers::connect_renderer),
+        )
         .route(
             "/serverApi/internal/graphics/:graphic_id/*path",
             get(handlers::graphics::serve_graphic_asset),
