@@ -19,6 +19,13 @@ API keys, encrypted renderer tokens, ...) implements `AccessControl` in its
 own crate and links `ograf-core` as a library — it never needs to fork or
 patch this code to do it.
 
+Which renderers exist beyond the connected ones is a second, separate seam:
+[`RendererDirectory`](src/directory.rs). Core keeps no storage — on its own
+it remembers disconnected renderers for the life of the process. A consumer
+with a database implements `known_renderers()` and passes it with
+`AppState::with_directory`, so controllers also see renderers that are
+offline or haven't connected yet (`status: ERROR`).
+
 ## Quick start
 
 ```rust
@@ -30,11 +37,11 @@ use ograf_core::{access::AllowAllAccessControl, build_router, config::Config, st
 async fn main() -> anyhow::Result<()> {
     let config = Config::from_env();
 
-    let state = AppState {
-        config: Arc::new(config),
-        renderers: Arc::new(RendererRegistry::new()),
-        access: Arc::new(AllowAllAccessControl),
-    };
+    let state = AppState::new(
+        Arc::new(config),
+        Arc::new(RendererRegistry::new()),
+        Arc::new(AllowAllAccessControl),
+    );
 
     let addr: SocketAddr = format!("{}:{}", state.config.host, state.config.port).parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -59,7 +66,8 @@ top-level router alongside whatever admin/auth routes your binary adds.
 | `RUST_LOG` | `info` | Log level |
 | `OGRAF_ACTION_TIMEOUT_MS` | `5000` | How long an HTTP action call waits for the renderer's confirmation before failing |
 | `OGRAF_GRAPHICS_CACHE_TTL_SECS` | `30` | Graphics list cache TTL in seconds (0 = disabled, always fetch fresh) |
-| `OGRAF_RENDERER_MAX_PENDING` | `100` | Maximum pending requests per renderer (DoS protection) |
+| `OGRAF_RENDERER_MAX_PENDING` | `100` | Maximum pending requests per renderer (DoS protection); half of it makes the renderer's status `WARNING` |
+| `OGRAF_DELETED_GRAPHIC_RETENTION_SECS` | `86400` | How long a graphic deleted without `force` keeps its files for on-air instances |
 
 ## Where graphics come from
 
@@ -81,8 +89,9 @@ consider `OGRAF_GRAPHICS_CACHE_TTL_SECS=0`.
 - `GET /ograf/v1/` — server info (name, description, author, version from Core's `Cargo.toml`)
 - `GET /ograf/v1/health` — health check (always returns 200 OK, no auth required)
 - `GET /ograf/v1/graphics`, `GET /ograf/v1/graphics/:id` — list/inspect graphics
+- `DELETE /ograf/v1/graphics/:id?force=` — unlist a graphic (its files stay for on-air instances until the retention ends), or remove it at once with `force=true`
 - `GET /ograf/v1/graphics/:id/assets/*path`, `GET /ograf/v1/graphics/:id/thumbnail` — serve graphic assets
-- `GET /ograf/v1/renderers`, `GET /ograf/v1/renderers/:id`, `GET /ograf/v1/renderers/:id/target` — list/inspect renderers
+- `GET /ograf/v1/renderers`, `GET /ograf/v1/renderers/:id`, `GET /ograf/v1/renderers/:id/target` — list/inspect renderers, each with the spec's `status` (`OK`/`WARNING`/`ERROR`) — see [SPEC_COMPLIANCE.md](SPEC_COMPLIANCE.md#renderer-status)
 - `PUT /ograf/v1/renderers/:id/target/graphicInstance/{load,clear}`
 - `POST /ograf/v1/renderers/:id/target/graphicInstance/{playAction,stopAction,updateAction}`
 - `POST /ograf/v1/renderers/:id/target/graphicInstance/customActions/:actionId`
